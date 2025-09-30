@@ -1,0 +1,256 @@
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Virtual machine crash logs
+hs_err_pid*
+replay_pid*
+
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+gradle-app.setting
+!gradle-wrapper.properties
+
+# Maven (in case someone uses Maven)
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+# Eclipse
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.tmp
+*.temp
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Application specific
+# Generated protobuf files (keep source .proto files)
+/src/generated/
+/generated/
+
+# Test reports
+/build/reports/
+/build/test-results/
+/build/jacoco/
+
+# Application logs
+/logs/
+*.log.*
+application*.log
+spring*.log
+
+# Configuration files with sensitive data (if any)
+application-local.yml
+application-local.yaml
+application-local.properties
+*-local.yml
+*-local.yaml
+*-local.properties
+secrets.yml
+secrets.yaml
+secrets.properties
+
+# Load test results
+results.json
+results.csv
+load-test-*.json
+load-test-*.csv
+*.jmx
+
+# JProfiler
+*.jprofiler
+
+# YourKit
+*.yksnap
+
+# Java heap dumps
+*.hprof
+
+# JaCoCo coverage reports
+.jacoco/
+jacoco.exec
+jacoco-it.exec
+
+# SonarQube
+.sonar/
+.scannerwork/
+
+# Checkstyle
+checkstyle-result.xml
+
+# SpotBugs
+spotbugs.xml
+spotbugsXml.xml
+
+# PMD
+pmd.xml
+
+# Distribution / packaging
+.Python
+dist/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Docker
+Dockerfile.local
+docker-compose.override.yml
+.docker/
+
+# Terraform (if used for infrastructure)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.orig
+*.rej
+
+# Lock files (let build tools manage these)
+# Uncomment if you want to ignore lock files
+# package-lock.json
+# yarn.lock
+
+# OS generated files
+.fseventsd
+.Trashes
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# User-specific files
+.vscode/settings.json
+.vscode/launch.json
+
+# Build outputs
+/out/
+/bin/
+
+# Application specific outputs
+grpc-load-test-client.jar
+load-test-results/
+performance-reports/
