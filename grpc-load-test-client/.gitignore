@@ -159,7 +159,14 @@ results.json
 results.csv
 load-test-*.json
 load-test-*.csv
+metrics-*.json
+metrics-*.csv
+performance-*.json
+performance-*.csv
 *.jmx
+
+# gRPC generated code (already handled by Gradle, but explicit for clarity)
+/build/generated/source/proto/
 
 # JProfiler
 *.jprofiler

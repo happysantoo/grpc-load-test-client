@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Timeout;
 
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -162,10 +163,13 @@ class VirtualThreadExecutorTest {
     @Test
     void shouldTrackStatisticsCorrectly() throws Exception {
         executor = new VirtualThreadExecutor(10);
+        CountDownLatch latch = new CountDownLatch(2);
+        CountDownLatch startLatch = new CountDownLatch(2);
 
         CompletableFuture<Integer> future1 = executor.submit(() -> {
             try {
-                Thread.sleep(100);
+                startLatch.countDown();
+                latch.await(2, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
@@ -173,27 +177,35 @@ class VirtualThreadExecutorTest {
         });
         CompletableFuture<Integer> future2 = executor.submit(() -> {
             try {
-                Thread.sleep(100);
+                startLatch.countDown();
+                latch.await(2, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
             return 2;
         });
 
+        // Wait for both tasks to start
+        assertTrue(startLatch.await(1, TimeUnit.SECONDS));
+        
         // Check stats while tasks are running
-        Thread.sleep(50);
         VirtualThreadExecutor.ExecutorStats runningStats = executor.getStats();
+
+        assertEquals(2, runningStats.getSubmittedTasks());
+        assertEquals(2, runningStats.getActiveRequests());
+        assertEquals(10, runningStats.getMaxConcurrentRequests());
+        assertTrue(runningStats.getUtilizationPercent() >= 15.0); // Allow some tolerance
+        assertTrue(runningStats.getUtilizationPercent() <= 25.0);
+
+        // Release tasks
+        latch.countDown();
+        latch.countDown();
 
         // Wait for completion
         future1.get(1, TimeUnit.SECONDS);
         future2.get(1, TimeUnit.SECONDS);
 
         VirtualThreadExecutor.ExecutorStats finalStats = executor.getStats();
-
-        assertEquals(2, runningStats.getSubmittedTasks());
-        assertTrue(runningStats.getActiveRequests() > 0);
-        assertEquals(10, runningStats.getMaxConcurrentRequests());
-        assertTrue(runningStats.getUtilizationPercent() > 0);
 
         assertEquals(2, finalStats.getSubmittedTasks());
         assertEquals(2, finalStats.getCompletedTasks());
@@ -204,24 +216,31 @@ class VirtualThreadExecutorTest {
     @Test
     void shouldDetectSaturationCorrectly() throws Exception {
         executor = new VirtualThreadExecutor(1);
+        CountDownLatch taskStarted = new CountDownLatch(1);
+        CountDownLatch taskCanFinish = new CountDownLatch(1);
 
         CompletableFuture<String> future = executor.submit(() -> {
             try {
-                Thread.sleep(200);
+                taskStarted.countDown();
+                taskCanFinish.await(2, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
             return "done";
         });
 
-        Thread.sleep(50); // Let task start
-        boolean saturated = executor.isSaturated();
+        // Wait for task to start
+        assertTrue(taskStarted.await(1, TimeUnit.SECONDS));
+        
+        // Now the executor should be saturated
+        assertTrue(executor.isSaturated());
 
+        // Release the task
+        taskCanFinish.countDown();
         future.get(1, TimeUnit.SECONDS);
-        boolean notSaturated = executor.isSaturated();
-
-        assertTrue(saturated);
-        assertFalse(notSaturated);
+        
+        // Now it should not be saturated
+        assertFalse(executor.isSaturated());
     }
 
     @Test
