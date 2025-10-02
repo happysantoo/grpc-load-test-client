@@ -91,15 +91,20 @@ public class ThroughputController {
      */
     public boolean tryAcquirePermit() {
         long currentTime = System.nanoTime();
-        long scheduledTime = nextExecutionTime.getAndAdd(getCurrentIntervalNanos());
+        long interval = getCurrentIntervalNanos();
+        long scheduledTime = nextExecutionTime.getAndAdd(interval);
         
         if (scheduledTime <= currentTime) {
             totalPermitsIssued.incrementAndGet();
             return true;
         }
         
-        // Put back the interval we just consumed since we're not going to use it
-        nextExecutionTime.addAndGet(-getCurrentIntervalNanos());
+        // Rollback using CAS to ensure correctness in concurrent scenarios
+        long current;
+        do {
+            current = nextExecutionTime.get();
+        } while (!nextExecutionTime.compareAndSet(current, current - interval));
+        
         return false;
     }
     
@@ -176,11 +181,12 @@ public class ThroughputController {
      */
     public double getActualTps() {
         Duration elapsed = Duration.between(startTime, Instant.now());
-        if (elapsed.toMillis() < 1000) {
+        long elapsedSeconds = elapsed.toSeconds();
+        if (elapsedSeconds < 1) {
             return 0.0; // Not enough time to calculate meaningful TPS
         }
         
-        return totalPermitsIssued.get() / elapsed.toSeconds();
+        return (double) totalPermitsIssued.get() / elapsedSeconds;
     }
     
     /**

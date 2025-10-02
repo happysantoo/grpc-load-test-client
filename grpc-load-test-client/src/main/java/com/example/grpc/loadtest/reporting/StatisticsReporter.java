@@ -271,9 +271,9 @@ public class StatisticsReporter implements AutoCloseable {
         }
     }
     
-    private void generateCsvReport(MetricsSnapshot snapshot,
-                                 ThroughputController.ThroughputStats throughputStats,
-                                 VirtualThreadExecutor.ExecutorStats executorStats) {
+    private synchronized void generateCsvReport(MetricsSnapshot snapshot,
+                                              ThroughputController.ThroughputStats throughputStats,
+                                              VirtualThreadExecutor.ExecutorStats executorStats) {
         if (csvWriter == null) return;
         
         try {

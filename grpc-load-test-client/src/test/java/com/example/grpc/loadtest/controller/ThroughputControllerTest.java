@@ -5,6 +5,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -145,5 +148,51 @@ class ThroughputControllerTest {
         Thread.sleep(100); // Wait a bit for time to pass
 
         assertTrue(controller.getActualTps() >= 0);
+    }
+
+    @Test
+    void shouldHandleZeroElapsedTime() {
+        // Test Issue #3: Division by zero in getActualTps()
+        ThroughputController controller = new ThroughputController(100);
+        
+        // Call getActualTps immediately after creation (elapsed < 1 second)
+        double actualTps = controller.getActualTps();
+        
+        assertEquals(0.0, actualTps); // Should return 0.0 when elapsed time is too small
+    }
+
+    @Test
+    void shouldHandleConcurrentTryAcquirePermit() throws InterruptedException {
+        // Test Issue #11: Race condition in tryAcquirePermit()
+        ThroughputController controller = new ThroughputController(10); // Low TPS to force rollbacks
+        AtomicInteger successCount = new AtomicInteger(0);
+        int threadCount = 10;
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+
+        // Create multiple threads trying to acquire permits simultaneously
+        for (int i = 0; i < threadCount; i++) {
+            new Thread(() -> {
+                try {
+                    startLatch.await();
+                    if (controller.tryAcquirePermit()) {
+                        successCount.incrementAndGet();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    doneLatch.countDown();
+                }
+            }).start();
+        }
+
+        startLatch.countDown(); // Start all threads simultaneously
+        assertTrue(doneLatch.await(5, TimeUnit.SECONDS));
+
+        // The exact number of successful permits is not deterministic due to timing,
+        // but we should have at least 1 and the count should be consistent
+        long totalPermits = controller.getTotalPermitsIssued();
+        assertEquals(successCount.get(), totalPermits);
+        assertTrue(totalPermits > 0);
     }
 }

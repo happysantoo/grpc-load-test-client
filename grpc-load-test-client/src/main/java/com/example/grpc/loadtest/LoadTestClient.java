@@ -34,6 +34,11 @@ public class LoadTestClient implements Callable<Integer> {
     
     private static final Logger logger = LoggerFactory.getLogger(LoadTestClient.class);
     
+    // Constants for configuration defaults and limits
+    private static final int DEFAULT_FORK_JOIN_PARALLELISM = 1000;
+    private static final int SHUTDOWN_TIMEOUT_SECONDS = 30;
+    private static final int FINAL_METRICS_DELAY_MS = 1000;
+    
     @Option(names = {"-h", "--host"}, description = "Target gRPC server host (default: localhost)")
     private String host = "localhost";
     
@@ -93,7 +98,7 @@ public class LoadTestClient implements Callable<Integer> {
     
     public static void main(String[] args) {
         // Enable virtual threads for the main application
-        System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", "1000");
+        System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", String.valueOf(DEFAULT_FORK_JOIN_PARALLELISM));
         
         int exitCode = new CommandLine(new LoadTestClient()).execute(args);
         System.exit(exitCode);
@@ -117,13 +122,13 @@ public class LoadTestClient implements Callable<Integer> {
                    config.getLoad().getTps(), config.getLoad().getDuration().getSeconds(),
                    config.getLoad().getMaxConcurrentRequests());
         
-        // Initialize components
-        MetricsCollector metricsCollector = new MetricsCollector();
-        VirtualThreadExecutor executor = new VirtualThreadExecutor(config.getLoad().getMaxConcurrentRequests());
+        // Initialize components - all AutoCloseable resources in try-with-resources
         ThroughputController throughputController = new ThroughputController(
                 config.getLoad().getTps(), config.getLoad().getRampUpDuration());
         
-        try (GrpcLoadTestClient grpcClient = new GrpcLoadTestClient(config);
+        try (MetricsCollector metricsCollector = new MetricsCollector();
+             VirtualThreadExecutor executor = new VirtualThreadExecutor(config.getLoad().getMaxConcurrentRequests());
+             GrpcLoadTestClient grpcClient = new GrpcLoadTestClient(config);
              StatisticsReporter reporter = new StatisticsReporter(config, metricsCollector, 
                      throughputController, executor)) {
             
@@ -133,14 +138,6 @@ public class LoadTestClient implements Callable<Integer> {
         } catch (Exception e) {
             logger.error("Load test execution failed", e);
             return 1;
-        } finally {
-            // Clean up
-            if (metricsCollector != null) {
-                metricsCollector.close();
-            }
-            if (executor != null) {
-                executor.close();
-            }
         }
     }
     
@@ -187,14 +184,57 @@ public class LoadTestClient implements Callable<Integer> {
     }
     
     private void validateConfiguration(LoadTestConfig config) {
+        // TPS validation
         if (config.getLoad().getTps() <= 0) {
             throw new IllegalArgumentException("TPS must be positive");
         }
+        if (config.getLoad().getTps() > 100000) {
+            throw new IllegalArgumentException("TPS too high (max 100,000)");
+        }
+        
+        // Duration validation
         if (config.getLoad().getDuration().isNegative() || config.getLoad().getDuration().isZero()) {
             throw new IllegalArgumentException("Duration must be positive");
         }
+        if (config.getLoad().getDuration().compareTo(Duration.ofHours(24)) > 0) {
+            logger.warn("Duration exceeds 24 hours, this may cause memory issues");
+        }
+        
+        // Concurrency validation
         if (config.getLoad().getMaxConcurrentRequests() <= 0) {
             throw new IllegalArgumentException("Max concurrency must be positive");
+        }
+        if (config.getLoad().getMaxConcurrentRequests() > 100000) {
+            logger.warn("Very high concurrency ({}), may cause resource exhaustion", 
+                       config.getLoad().getMaxConcurrentRequests());
+        }
+        
+        // Validate ramp-up doesn't exceed test duration
+        if (config.getLoad().getRampUpDuration().compareTo(config.getLoad().getDuration()) > 0) {
+            throw new IllegalArgumentException("Ramp-up duration cannot exceed test duration");
+        }
+        
+        // Validate warmup duration is reasonable
+        if (config.getLoad().getWarmupDuration().compareTo(config.getLoad().getDuration()) > 0) {
+            throw new IllegalArgumentException("Warmup duration cannot exceed test duration");
+        }
+        
+        // Validate timeout settings
+        if (config.getClient().getRequestTimeoutMs() <= 0) {
+            throw new IllegalArgumentException("Request timeout must be positive");
+        }
+        if (config.getClient().getRequestTimeoutMs() > 300000) { // 5 minutes
+            logger.warn("Very high request timeout ({}ms), may affect test accuracy", 
+                       config.getClient().getRequestTimeoutMs());
+        }
+        
+        // Validate reporting interval
+        if (config.getReporting().getReportingIntervalSeconds() < 0) {
+            throw new IllegalArgumentException("Reporting interval cannot be negative");
+        }
+        if (config.getReporting().getReportingIntervalSeconds() > 3600) { // 1 hour
+            logger.warn("Very high reporting interval ({}s), may reduce visibility", 
+                       config.getReporting().getReportingIntervalSeconds());
         }
         
         logger.info("Configuration validated successfully");
@@ -236,11 +276,11 @@ public class LoadTestClient implements Callable<Integer> {
         
         // Wait for remaining requests to complete
         logger.info("Waiting for remaining requests to complete...");
-        executor.awaitCompletion(30, java.util.concurrent.TimeUnit.SECONDS);
+        executor.awaitCompletion(SHUTDOWN_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
         
         // Stop reporting and generate final report
         reporter.stopRealTimeReporting();
-        Thread.sleep(1000); // Give time for final metrics to be recorded
+        Thread.sleep(FINAL_METRICS_DELAY_MS); // Give time for final metrics to be recorded
         
         logger.info("Load test completed. Actual duration: {}ms", actualDurationMs);
         reporter.generateFinalReport();

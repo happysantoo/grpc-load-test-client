@@ -65,6 +65,10 @@ public class GrpcLoadTestClient implements AutoCloseable {
     
     private RandomizationManager createRandomizationManager(LoadTestConfig config) {
         LoadTestConfig.RandomizationConfig randConfig = config.getRandomization();
+        if (randConfig == null) {
+            // Create default randomization config if none provided
+            randConfig = new LoadTestConfig.RandomizationConfig();
+        }
         
         RandomizationManager.RandomizationConfig.Builder builder = 
             new RandomizationManager.RandomizationConfig.Builder();
@@ -93,18 +97,33 @@ public class GrpcLoadTestClient implements AutoCloseable {
     private RandomizationManager.RandomFieldConfig convertToRandomFieldConfig(LoadTestConfig.RandomizationConfig.RandomFieldConfig configField) {
         switch (configField.getType().toLowerCase()) {
             case "string":
+                Object minVal = configField.getMinValue();
+                Object maxVal = configField.getMaxValue();
+                if (!(minVal instanceof Integer) || !(maxVal instanceof Integer)) {
+                    throw new IllegalArgumentException("String randomization requires integer min/max values for field type: " + configField.getType());
+                }
                 return RandomizationManager.RandomFieldConfig.randomString(
-                    (Integer) configField.getMinValue(), 
-                    (Integer) configField.getMaxValue());
+                    (Integer) minVal, (Integer) maxVal);
             case "number":
+                Object minNumVal = configField.getMinValue();
+                Object maxNumVal = configField.getMaxValue();
+                if (!(minNumVal instanceof Number) || !(maxNumVal instanceof Number)) {
+                    throw new IllegalArgumentException("Number randomization requires numeric min/max values for field type: " + configField.getType());
+                }
                 return RandomizationManager.RandomFieldConfig.randomNumber(
-                    (Number) configField.getMinValue(), 
-                    (Number) configField.getMaxValue());
+                    (Number) minNumVal, (Number) maxNumVal);
             case "list":
+                if (configField.getPossibleValues() == null || configField.getPossibleValues().isEmpty()) {
+                    throw new IllegalArgumentException("List randomization requires non-empty possibleValues for field type: " + configField.getType());
+                }
                 return RandomizationManager.RandomFieldConfig.fromList(configField.getPossibleValues());
             case "pattern":
+                if (configField.getPattern() == null || configField.getPattern().trim().isEmpty()) {
+                    throw new IllegalArgumentException("Pattern randomization requires non-empty pattern for field type: " + configField.getType());
+                }
                 return RandomizationManager.RandomFieldConfig.pattern(configField.getPattern());
             default:
+                logger.warn("Unknown randomization field type: {}, falling back to default string randomization", configField.getType());
                 return RandomizationManager.RandomFieldConfig.randomString(5, 10);
         }
     }

@@ -5,6 +5,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class MetricsCollectorTest {
@@ -207,5 +210,61 @@ class MetricsCollectorTest {
     @Test
     void shouldCloseWithoutErrors() {
         assertDoesNotThrow(() -> metricsCollector.close());
+    }
+
+    @Test
+    void shouldHandleMemoryLeakPrevention() throws InterruptedException {
+        // Test Issue #5: Memory leak prevention in timeWindows cleanup
+        MetricsCollector collector = new MetricsCollector(100, 100); // 100ms windows
+        
+        // Record many results over time to trigger window cleanup
+        for (int i = 0; i < 50; i++) {
+            GrpcLoadTestClient.CallResult result = GrpcLoadTestClient.CallResult.success(i, 1_000_000L, 100);
+            collector.recordResult(result);
+            
+            if (i % 10 == 0) {
+                Thread.sleep(150); // Wait longer than window size to trigger cleanup
+            }
+        }
+        
+        // Get snapshot to ensure no exceptions occur during cleanup
+        MetricsSnapshot snapshot = collector.getSnapshot();
+        assertEquals(50, snapshot.getTotalRequests());
+        
+        collector.close();
+    }
+
+    @Test 
+    void shouldHandleConcurrentAccess() throws InterruptedException {
+        // Test concurrent access to MetricsCollector
+        int threadCount = 10;
+        int recordsPerThread = 50;
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+        
+        for (int t = 0; t < threadCount; t++) {
+            final int threadId = t;
+            new Thread(() -> {
+                try {
+                    startLatch.await();
+                    for (int i = 0; i < recordsPerThread; i++) {
+                        GrpcLoadTestClient.CallResult result = GrpcLoadTestClient.CallResult.success(
+                            threadId * recordsPerThread + i, 1_000_000L, 100);
+                        metricsCollector.recordResult(result);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    doneLatch.countDown();
+                }
+            }).start();
+        }
+        
+        startLatch.countDown();
+        assertTrue(doneLatch.await(10, TimeUnit.SECONDS));
+        
+        MetricsSnapshot snapshot = metricsCollector.getSnapshot();
+        assertEquals(threadCount * recordsPerThread, snapshot.getTotalRequests());
+        assertEquals(100.0, snapshot.getSuccessRate(), 0.01);
     }
 }

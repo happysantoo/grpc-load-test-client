@@ -23,6 +23,12 @@ public class MetricsCollector implements AutoCloseable {
     
     private static final Logger logger = LoggerFactory.getLogger(MetricsCollector.class);
     
+    // Constants for configuration defaults
+    private static final int DEFAULT_MAX_LATENCY_HISTORY_SIZE = 10000;
+    private static final long DEFAULT_WINDOW_SIZE_MS = 1000;
+    private static final long CLEANUP_INTERVAL_MS = 60000; // 60 seconds
+    private static final long WINDOW_RETENTION_MS = 10 * 60 * 1000; // 10 minutes
+    
     private final Instant startTime;
     private final AtomicLong totalRequests = new AtomicLong(0);
     private final AtomicLong successfulRequests = new AtomicLong(0);
@@ -47,7 +53,7 @@ public class MetricsCollector implements AutoCloseable {
     private final ConcurrentHashMap<String, AtomicLong> errorCounts = new ConcurrentHashMap<>();
     
     public MetricsCollector() {
-        this(10000, 1000); // Default: 10k latency history, 1s time windows
+        this(DEFAULT_MAX_LATENCY_HISTORY_SIZE, DEFAULT_WINDOW_SIZE_MS); // Default: 10k latency history, 1s time windows
     }
     
     public MetricsCollector(int maxLatencyHistorySize, long windowSizeMs) {
@@ -121,12 +127,15 @@ public class MetricsCollector implements AutoCloseable {
             windowLock.readLock().unlock();
         }
         
-        // Clean up old windows (keep only last 10 minutes worth)
-        cleanupOldWindows(currentTimeMs);
+        // Clean up old windows periodically (keep only last 10 minutes worth)
+        // Only cleanup every 60 seconds to avoid excessive cleanup overhead
+        if (currentTimeMs % CLEANUP_INTERVAL_MS < windowSizeMs) {
+            cleanupOldWindows(currentTimeMs);
+        }
     }
     
     private void cleanupOldWindows(long currentTimeMs) {
-        long cutoffTime = currentTimeMs - (10 * 60 * 1000); // 10 minutes ago
+        long cutoffTime = currentTimeMs - WINDOW_RETENTION_MS; // 10 minutes ago
         
         windowLock.writeLock().lock();
         try {

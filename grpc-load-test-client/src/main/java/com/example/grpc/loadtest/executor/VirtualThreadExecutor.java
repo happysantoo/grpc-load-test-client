@@ -209,6 +209,10 @@ public class VirtualThreadExecutor implements AutoCloseable {
             if (!virtualThreadExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
                 logger.warn("Executor did not terminate gracefully, forcing shutdown");
                 virtualThreadExecutor.shutdownNow();
+                // Wait for forced shutdown to complete
+                if (!virtualThreadExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    logger.error("Executor did not terminate after forced shutdown");
+                }
             }
         } catch (InterruptedException e) {
             logger.warn("Interrupted while shutting down executor", e);

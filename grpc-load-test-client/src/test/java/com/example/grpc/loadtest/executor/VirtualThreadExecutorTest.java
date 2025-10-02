@@ -352,4 +352,32 @@ class VirtualThreadExecutorTest {
         assertTrue(statsString.contains("max=100"));
         assertTrue(statsString.contains("utilization=0.0%"));
     }
+
+    @Test
+    @Timeout(10)
+    void shouldHandleTimeoutDuringShutdown() throws Exception {
+        // Test Issue #7: Improved timeout handling during shutdown
+        executor = new VirtualThreadExecutor(5);
+        
+        // Submit long-running tasks that may not finish in the first shutdown timeout
+        for (int i = 0; i < 3; i++) {
+            executor.submit(() -> {
+                try {
+                    Thread.sleep(6000); // Longer than the 5-second timeout
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    // Task should be interrupted during shutdown
+                }
+                return "completed";
+            });
+        }
+        
+        Thread.sleep(100); // Let tasks start
+        
+        // Close should handle the timeout gracefully and force shutdown if needed
+        assertDoesNotThrow(() -> executor.close());
+        
+        // After close, all resources should be cleaned up
+        assertEquals(0, executor.getActiveRequests());
+    }
 }
