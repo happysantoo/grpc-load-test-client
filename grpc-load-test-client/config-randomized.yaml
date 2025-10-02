@@ -1,0 +1,81 @@
+target:
+  host: localhost
+  port: 8080
+  method: Echo
+  use_tls: false
+
+load:
+  tps: 100
+  duration: PT60S
+  concurrency: 1000
+  ramp_up_duration: PT10S
+
+client:
+  max_connections: 10
+  request_timeout_ms: 30000
+  keep_alive_time_ms: 60000
+  keep_alive_timeout_ms: 5000
+  keep_alive_without_calls: true
+  max_inbound_message_size: 4194304
+
+reporting:
+  reporting_interval_seconds: 5
+  enable_real_time_stats: true
+  percentiles: [0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99]
+  output_format: console
+
+# New payload transformation configuration
+payload:
+  enable_transformation: true
+  base_payload:
+    message: "Base load test message"
+    metadata:
+      test_type: "randomized_load_test"
+      version: "1.0"
+  default_values:
+    message: "Default test message"
+    iterations: 500
+    algorithm: "sha256"
+  transformation_rules:
+    message:
+      type: "TEMPLATE"
+      parameters:
+        template: "LoadTest-${timestamp}-${random}"
+    client_id:
+      type: "PREFIX"
+      parameters:
+        prefix: "client-"
+    iterations:
+      type: "RANDOM_NUMBER"
+      parameters:
+        min: 100
+        max: 2000
+        type: "int"
+
+# New randomization configuration
+randomization:
+  enable_method_randomization: true
+  available_methods: ["Echo", "ComputeHash", "HealthCheck"]
+  method_weights:
+    Echo: 0.6
+    ComputeHash: 0.3
+    HealthCheck: 0.1
+  enable_payload_randomization: true
+  random_fields:
+    user_id:
+      type: "PATTERN"
+      pattern: "user_{d}{d}{d}{d}"
+    session_id:
+      type: "STRING"
+      min_value: 8
+      max_value: 16
+    priority:
+      type: "LIST"
+      possible_values: ["low", "medium", "high", "critical"]
+    score:
+      type: "NUMBER"
+      min_value: 1.0
+      max_value: 100.0
+  enable_timing_randomization: true
+  min_delay_ms: 10
+  max_delay_ms: 500

@@ -25,6 +25,7 @@ A high-performance gRPC load testing tool built with **Java 21 virtual threads**
 
 ## ✨ Key Features
 
+### Core Features
 - 🧵 **Virtual Threads**: Handle 10,000+ concurrent requests efficiently
 - 📊 **Detailed Metrics**: P10, P25, P50, P75, P90, P95, P99 latency percentiles
 - 🎯 **Precise TPS Control**: Accurate rate limiting with optional ramp-up
@@ -32,6 +33,14 @@ A high-performance gRPC load testing tool built with **Java 21 virtual threads**
 - 📤 **Multiple Formats**: Console, JSON, and CSV output
 - 🔐 **TLS Support**: Secure connections
 - ⚙️ **Flexible Config**: CLI arguments or YAML configuration
+
+### 🆕 Advanced Features
+- 🎲 **Request Randomization**: Random method selection with configurable weights
+- 🔄 **Payload Transformation**: Dynamic request modification with transformation rules
+- 🎯 **Field Randomization**: Random values for specific fields (strings, numbers, patterns)
+- ⏱️ **Timing Variation**: Random delays between requests for realistic load patterns
+- 🎨 **Template System**: Use templates with variables for dynamic content generation
+- 🎛️ **Configurable Rules**: YAML-based configuration for complex scenarios
 
 ## 📋 Command Line Options
 
@@ -48,6 +57,8 @@ A high-performance gRPC load testing tool built with **Java 21 virtual threads**
 | `--tls` | Use TLS connection | `false` |
 | `--timeout` | Request timeout in milliseconds | `5000` |
 | `--output-format` | Output format (console, json, csv) | `console` |
+| `--enable-randomization` | Enable randomized request execution | `false` |
+| `--enable-payload-transformation` | Enable payload transformation | `false` |
 | `--output-file` | Output file path | - |
 | `--config` | Configuration file path (YAML) | - |
 | `--verbose, -v` | Enable verbose logging | `false` |
@@ -79,6 +90,64 @@ reporting:
 
 Run with: `./gradlew run --args="--config config.yaml"`
 
+### 🎲 Advanced Randomization Configuration
+
+```yaml
+# Enable request randomization and payload transformation
+randomization:
+  enable_method_randomization: true
+  available_methods: ["Echo", "ComputeHash", "HealthCheck"]
+  method_weights:
+    Echo: 0.6        # 60% probability
+    ComputeHash: 0.3  # 30% probability
+    HealthCheck: 0.1  # 10% probability
+  
+  enable_payload_randomization: true
+  random_fields:
+    user_id:
+      type: "PATTERN"
+      pattern: "user_{d}{d}{d}{d}"  # Generates: user_1234
+    session_token:
+      type: "STRING"
+      min_value: 16
+      max_value: 32
+    priority:
+      type: "LIST"
+      possible_values: ["low", "medium", "high", "critical"]
+    score:
+      type: "NUMBER"
+      min_value: 1.0
+      max_value: 100.0
+
+  enable_timing_randomization: true
+  min_delay_ms: 10
+  max_delay_ms: 500
+
+# Payload transformation rules
+payload:
+  enable_transformation: true
+  base_payload:
+    message: "Load test from client"
+    metadata:
+      test_type: "randomized"
+  transformation_rules:
+    message:
+      type: "TEMPLATE" 
+      parameters:
+        template: "Test-${timestamp}-${random}-${uuid}"
+    client_id:
+      type: "PREFIX"
+      parameters:
+        prefix: "client-"
+    iterations:
+      type: "RANDOM_NUMBER"
+      parameters:
+        min: 100
+        max: 2000
+```
+
+Run with: `./gradlew run --args="--config config-randomized.yaml"`
+
 ## 💡 Usage Examples
 
 ```bash
@@ -87,6 +156,15 @@ Run with: `./gradlew run --args="--config config.yaml"`
 
 # High-throughput with ramp-up
 ./gradlew run --args="--tps 2000 --duration 600 --ramp-up 60 --concurrency 5000"
+
+# Randomized load testing
+./gradlew run --args="--host localhost --port 8080 --enable-randomization --config config-randomized.yaml"
+
+# Simple payload transformation
+./gradlew run --args="--host localhost --port 8080 --enable-payload-transformation --tps 100"
+
+# Combined randomization and transformation
+./gradlew run --args="--enable-randomization --enable-payload-transformation --config advanced-config.yaml"
 
 # JSON output to file
 ./gradlew run --args="--tps 100 --output-format json --output-file results.json"

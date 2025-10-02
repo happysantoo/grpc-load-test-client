@@ -82,6 +82,12 @@ public class LoadTestClient implements Callable<Integer> {
     @Option(names = {"--verbose", "-v"}, description = "Enable verbose logging")
     private boolean verbose = false;
     
+    @Option(names = {"--enable-randomization"}, description = "Enable randomized request execution (uses config file settings)")
+    private boolean enableRandomization = false;
+    
+    @Option(names = {"--enable-payload-transformation"}, description = "Enable payload transformation (uses config file settings)")
+    private boolean enablePayloadTransformation = false;
+    
     @Parameters(description = "Additional arguments (unused)")
     private String[] args;
     
@@ -165,6 +171,17 @@ public class LoadTestClient implements Callable<Integer> {
         config.getReporting().setReportingIntervalSeconds(reportIntervalSeconds);
         config.getReporting().setOutputFormat(outputFormat);
         config.getReporting().setOutputFile(outputFile);
+        
+        // Override randomization and payload transformation settings from CLI
+        if (enablePayloadTransformation) {
+            config.getPayload().setEnableTransformation(true);
+        }
+        
+        // If no config file is provided but randomization is enabled, use minimal defaults
+        if (enableRandomization && configFile == null) {
+            config.getRandomization().setEnableMethodRandomization(true);
+            config.getRandomization().setAvailableMethods(java.util.List.of("Echo", "ComputeHash", "HealthCheck"));
+        }
         
         return config;
     }
@@ -277,6 +294,18 @@ public class LoadTestClient implements Callable<Integer> {
     private GrpcLoadTestClient.CallResult executeRequest(LoadTestConfig config, 
                                                         GrpcLoadTestClient grpcClient, 
                                                         long requestId) {
+        
+        // Use randomized execution if enabled (either via CLI or config)
+        boolean useRandomization = enableRandomization || 
+                                 config.getRandomization().isEnableMethodRandomization() ||
+                                 config.getRandomization().isEnablePayloadRandomization() ||
+                                 config.getPayload().isEnableTransformation();
+        
+        if (useRandomization) {
+            return grpcClient.executeRandomRequest();
+        }
+        
+        // Original static method execution
         String method = config.getTarget().getMethod();
         
         switch (method.toLowerCase()) {

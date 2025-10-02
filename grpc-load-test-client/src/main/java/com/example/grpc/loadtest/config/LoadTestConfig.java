@@ -27,6 +27,12 @@ public class LoadTestConfig {
     @JsonProperty("reporting")
     private ReportingConfig reporting = new ReportingConfig();
     
+    @JsonProperty("payload")
+    private PayloadConfig payload = new PayloadConfig();
+    
+    @JsonProperty("randomization")
+    private RandomizationConfig randomization = new RandomizationConfig();
+    
     // Getters and setters
     public TargetConfig getTarget() { return target; }
     public void setTarget(TargetConfig target) { this.target = target; }
@@ -39,6 +45,12 @@ public class LoadTestConfig {
     
     public ReportingConfig getReporting() { return reporting; }
     public void setReporting(ReportingConfig reporting) { this.reporting = reporting; }
+    
+    public PayloadConfig getPayload() { return payload; }
+    public void setPayload(PayloadConfig payload) { this.payload = payload; }
+    
+    public RandomizationConfig getRandomization() { return randomization; }
+    public void setRandomization(RandomizationConfig randomization) { this.randomization = randomization; }
     
     /**
      * Load configuration from YAML file
@@ -237,5 +249,137 @@ public class LoadTestConfig {
         
         public String getOutputFile() { return outputFile; }
         public void setOutputFile(String outputFile) { this.outputFile = outputFile; }
+    }
+    
+    /**
+     * Payload manipulation and transformation configuration
+     */
+    public static class PayloadConfig {
+        @JsonProperty("enable_transformation")
+        private boolean enableTransformation = false;
+        
+        @JsonProperty("base_payload")
+        private Map<String, Object> basePayload = new HashMap<>();
+        
+        @JsonProperty("transformation_rules")
+        private Map<String, TransformationRuleConfig> transformationRules = new HashMap<>();
+        
+        @JsonProperty("default_values")
+        private Map<String, Object> defaultValues = new HashMap<>();
+        
+        // Getters and setters
+        public boolean isEnableTransformation() { return enableTransformation; }
+        public void setEnableTransformation(boolean enableTransformation) { this.enableTransformation = enableTransformation; }
+        
+        public Map<String, Object> getBasePayload() { return basePayload; }
+        public void setBasePayload(Map<String, Object> basePayload) { this.basePayload = basePayload; }
+        
+        public Map<String, TransformationRuleConfig> getTransformationRules() { return transformationRules; }
+        public void setTransformationRules(Map<String, TransformationRuleConfig> transformationRules) { this.transformationRules = transformationRules; }
+        
+        public Map<String, Object> getDefaultValues() { return defaultValues; }
+        public void setDefaultValues(Map<String, Object> defaultValues) { this.defaultValues = defaultValues; }
+        
+        public static class TransformationRuleConfig {
+            @JsonProperty("type")
+            private String type;
+            
+            @JsonProperty("parameters")
+            private Map<String, Object> parameters = new HashMap<>();
+            
+            // Getters and setters
+            public String getType() { return type; }
+            public void setType(String type) { this.type = type; }
+            
+            public Map<String, Object> getParameters() { return parameters; }
+            public void setParameters(Map<String, Object> parameters) { this.parameters = parameters; }
+        }
+    }
+    
+    /**
+     * Randomization configuration for varied load testing
+     */
+    public static class RandomizationConfig {
+        @JsonProperty("enable_method_randomization")
+        private boolean enableMethodRandomization = false;
+        
+        @JsonProperty("available_methods")
+        private java.util.List<String> availableMethods = java.util.List.of("Echo");
+        
+        @JsonProperty("method_weights")
+        private Map<String, Double> methodWeights = new HashMap<>();
+        
+        @JsonProperty("enable_payload_randomization")
+        private boolean enablePayloadRandomization = false;
+        
+        @JsonProperty("random_fields")
+        private Map<String, RandomFieldConfig> randomFields = new HashMap<>();
+        
+        @JsonProperty("enable_timing_randomization")
+        private boolean enableTimingRandomization = false;
+        
+        @JsonProperty("min_delay_ms")
+        private long minDelayMs = 0;
+        
+        @JsonProperty("max_delay_ms")
+        private long maxDelayMs = 100;
+        
+        // Getters and setters
+        public boolean isEnableMethodRandomization() { return enableMethodRandomization; }
+        public void setEnableMethodRandomization(boolean enableMethodRandomization) { this.enableMethodRandomization = enableMethodRandomization; }
+        
+        public java.util.List<String> getAvailableMethods() { return availableMethods; }
+        public void setAvailableMethods(java.util.List<String> availableMethods) { this.availableMethods = availableMethods; }
+        
+        public Map<String, Double> getMethodWeights() { return methodWeights; }
+        public void setMethodWeights(Map<String, Double> methodWeights) { this.methodWeights = methodWeights; }
+        
+        public boolean isEnablePayloadRandomization() { return enablePayloadRandomization; }
+        public void setEnablePayloadRandomization(boolean enablePayloadRandomization) { this.enablePayloadRandomization = enablePayloadRandomization; }
+        
+        public Map<String, RandomFieldConfig> getRandomFields() { return randomFields; }
+        public void setRandomFields(Map<String, RandomFieldConfig> randomFields) { this.randomFields = randomFields; }
+        
+        public boolean isEnableTimingRandomization() { return enableTimingRandomization; }
+        public void setEnableTimingRandomization(boolean enableTimingRandomization) { this.enableTimingRandomization = enableTimingRandomization; }
+        
+        public long getMinDelayMs() { return minDelayMs; }
+        public void setMinDelayMs(long minDelayMs) { this.minDelayMs = minDelayMs; }
+        
+        public long getMaxDelayMs() { return maxDelayMs; }
+        public void setMaxDelayMs(long maxDelayMs) { this.maxDelayMs = maxDelayMs; }
+        
+        public static class RandomFieldConfig {
+            @JsonProperty("type")
+            private String type;
+            
+            @JsonProperty("min_value")
+            private Object minValue;
+            
+            @JsonProperty("max_value")
+            private Object maxValue;
+            
+            @JsonProperty("possible_values")
+            private java.util.List<Object> possibleValues;
+            
+            @JsonProperty("pattern")
+            private String pattern;
+            
+            // Getters and setters
+            public String getType() { return type; }
+            public void setType(String type) { this.type = type; }
+            
+            public Object getMinValue() { return minValue; }
+            public void setMinValue(Object minValue) { this.minValue = minValue; }
+            
+            public Object getMaxValue() { return maxValue; }
+            public void setMaxValue(Object maxValue) { this.maxValue = maxValue; }
+            
+            public java.util.List<Object> getPossibleValues() { return possibleValues; }
+            public void setPossibleValues(java.util.List<Object> possibleValues) { this.possibleValues = possibleValues; }
+            
+            public String getPattern() { return pattern; }
+            public void setPattern(String pattern) { this.pattern = pattern; }
+        }
     }
 }

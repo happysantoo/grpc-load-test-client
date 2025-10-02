@@ -205,6 +205,9 @@ class VirtualThreadExecutorTest {
         future1.get(1, TimeUnit.SECONDS);
         future2.get(1, TimeUnit.SECONDS);
 
+        // Give a brief moment for stats to update
+        Thread.sleep(10);
+
         VirtualThreadExecutor.ExecutorStats finalStats = executor.getStats();
 
         assertEquals(2, finalStats.getSubmittedTasks());

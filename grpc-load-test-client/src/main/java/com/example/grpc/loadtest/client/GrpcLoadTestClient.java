@@ -1,6 +1,9 @@
 package com.example.grpc.loadtest.client;
 
 import com.example.grpc.loadtest.config.LoadTestConfig;
+import com.example.grpc.loadtest.payload.DefaultPayloadTransformer;
+import com.example.grpc.loadtest.payload.PayloadTransformer;
+import com.example.grpc.loadtest.randomization.RandomizationManager;
 import com.example.grpc.loadtest.proto.*;
 import io.grpc.*;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
@@ -8,6 +11,8 @@ import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -24,6 +29,8 @@ public class GrpcLoadTestClient implements AutoCloseable {
     private final LoadTestServiceGrpc.LoadTestServiceBlockingStub blockingStub;
     private final LoadTestServiceGrpc.LoadTestServiceStub asyncStub;
     private final AtomicLong requestCounter = new AtomicLong(0);
+    private final PayloadTransformer payloadTransformer;
+    private final RandomizationManager randomizationManager;
     
     public GrpcLoadTestClient(LoadTestConfig config) {
         this.config = config;
@@ -32,6 +39,10 @@ public class GrpcLoadTestClient implements AutoCloseable {
                 .withDeadlineAfter(config.getClient().getRequestTimeoutMs(), TimeUnit.MILLISECONDS);
         this.asyncStub = LoadTestServiceGrpc.newStub(channel)
                 .withDeadlineAfter(config.getClient().getRequestTimeoutMs(), TimeUnit.MILLISECONDS);
+        
+        // Initialize payload transformation and randomization
+        this.payloadTransformer = new DefaultPayloadTransformer();
+        this.randomizationManager = createRandomizationManager(config);
         
         logger.info("Created gRPC client for {}:{}", config.getTarget().getHost(), config.getTarget().getPort());
     }
@@ -50,6 +61,52 @@ public class GrpcLoadTestClient implements AutoCloseable {
         }
         
         return builder.build();
+    }
+    
+    private RandomizationManager createRandomizationManager(LoadTestConfig config) {
+        LoadTestConfig.RandomizationConfig randConfig = config.getRandomization();
+        
+        RandomizationManager.RandomizationConfig.Builder builder = 
+            new RandomizationManager.RandomizationConfig.Builder();
+        
+        if (randConfig.isEnableMethodRandomization()) {
+            builder.enableMethodRandomization(randConfig.getAvailableMethods(), randConfig.getMethodWeights());
+        }
+        
+        if (randConfig.isEnablePayloadRandomization()) {
+            Map<String, RandomizationManager.RandomFieldConfig> fieldConfigs = new HashMap<>();
+            for (Map.Entry<String, LoadTestConfig.RandomizationConfig.RandomFieldConfig> entry : randConfig.getRandomFields().entrySet()) {
+                LoadTestConfig.RandomizationConfig.RandomFieldConfig configField = entry.getValue();
+                RandomizationManager.RandomFieldConfig randomField = convertToRandomFieldConfig(configField);
+                fieldConfigs.put(entry.getKey(), randomField);
+            }
+            builder.enablePayloadRandomization(fieldConfigs);
+        }
+        
+        if (randConfig.isEnableTimingRandomization()) {
+            builder.enableTimingRandomization(randConfig.getMinDelayMs(), randConfig.getMaxDelayMs());
+        }
+        
+        return new RandomizationManager(builder.build());
+    }
+    
+    private RandomizationManager.RandomFieldConfig convertToRandomFieldConfig(LoadTestConfig.RandomizationConfig.RandomFieldConfig configField) {
+        switch (configField.getType().toLowerCase()) {
+            case "string":
+                return RandomizationManager.RandomFieldConfig.randomString(
+                    (Integer) configField.getMinValue(), 
+                    (Integer) configField.getMaxValue());
+            case "number":
+                return RandomizationManager.RandomFieldConfig.randomNumber(
+                    (Number) configField.getMinValue(), 
+                    (Number) configField.getMaxValue());
+            case "list":
+                return RandomizationManager.RandomFieldConfig.fromList(configField.getPossibleValues());
+            case "pattern":
+                return RandomizationManager.RandomFieldConfig.pattern(configField.getPattern());
+            default:
+                return RandomizationManager.RandomFieldConfig.randomString(5, 10);
+        }
     }
     
     /**
@@ -198,6 +255,177 @@ public class GrpcLoadTestClient implements AutoCloseable {
             logger.debug("HealthCheck request {} failed with exception: {}", requestId, e.getMessage());
             return CallResult.failure(requestId, latencyNanos, -1, e.getMessage());
         }
+    }
+    
+    /**
+     * Execute a random method with enhanced payload transformation and randomization
+     */
+    public CallResult executeRandomRequest() {
+        // Get random method
+        String method = randomizationManager.getRandomMethod();
+        
+        // Apply randomization delay if enabled
+        long delay = randomizationManager.getRandomDelay();
+        if (delay > 0) {
+            try {
+                Thread.sleep(delay);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        
+        // Execute based on selected method
+        switch (method) {
+            case "ComputeHash":
+                return executeRandomComputeHash();
+            case "HealthCheck":
+                return executeHealthCheck();
+            case "StreamingEcho":
+                // For now, fallback to Echo for streaming
+                return executeRandomEcho();
+            default:
+                return executeRandomEcho();
+        }
+    }
+    
+    /**
+     * Execute Echo method with randomized and transformed payload
+     */
+    public CallResult executeRandomEcho() {
+        long startTime = System.nanoTime();
+        long requestId = requestCounter.incrementAndGet();
+        
+        try {
+            // Start with base payload or defaults
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("message", config.getPayload().getDefaultValues().getOrDefault("message", "Hello World"));
+            payload.put("timestamp", System.currentTimeMillis());
+            payload.put("clientId", "load-test-client");
+            
+            // Apply base payload overrides
+            payload.putAll(config.getPayload().getBasePayload());
+            
+            // Apply randomization
+            Map<String, Object> randomFields = randomizationManager.generateRandomFields();
+            payload.putAll(randomFields);
+            
+            // Apply payload transformations
+            if (config.getPayload().isEnableTransformation()) {
+                Map<String, PayloadTransformer.TransformationRule> transformationRules = convertTransformationRules();
+                payload = payloadTransformer.transform(payload, transformationRules);
+            }
+            
+            // Build the gRPC request
+            EchoRequest.Builder requestBuilder = EchoRequest.newBuilder()
+                    .setMessage(String.valueOf(payload.get("message")))
+                    .setTimestamp(((Number) payload.get("timestamp")).longValue())
+                    .setClientId(String.valueOf(payload.get("clientId")));
+            
+            // Add metadata if present
+            if (payload.containsKey("metadata") && payload.get("metadata") instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, String> metadata = (Map<String, String>) payload.get("metadata");
+                requestBuilder.putAllMetadata(metadata);
+            }
+            
+            EchoRequest request = requestBuilder.build();
+            EchoResponse response = blockingStub.echo(request);
+            
+            long endTime = System.nanoTime();
+            long latencyNanos = endTime - startTime;
+            
+            return CallResult.success(requestId, latencyNanos, response.toString().length());
+            
+        } catch (StatusRuntimeException e) {
+            long endTime = System.nanoTime();
+            long latencyNanos = endTime - startTime;
+            
+            logger.debug("Random Echo request {} failed with status: {}", requestId, e.getStatus());
+            return CallResult.failure(requestId, latencyNanos, e.getStatus().getCode().value(), e.getMessage());
+        } catch (Exception e) {
+            long endTime = System.nanoTime();
+            long latencyNanos = endTime - startTime;
+            
+            logger.debug("Random Echo request {} failed with exception: {}", requestId, e.getMessage());
+            return CallResult.failure(requestId, latencyNanos, -1, e.getMessage());
+        }
+    }
+    
+    /**
+     * Execute ComputeHash method with randomized payload
+     */
+    public CallResult executeRandomComputeHash() {
+        long startTime = System.nanoTime();
+        long requestId = requestCounter.incrementAndGet();
+        
+        try {
+            // Start with default payload
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("input", "default-input");
+            payload.put("iterations", 1000);
+            payload.put("algorithm", "sha256");
+            
+            // Apply base payload and randomization
+            payload.putAll(config.getPayload().getBasePayload());
+            payload.putAll(randomizationManager.generateRandomFields());
+            
+            // Apply transformations
+            if (config.getPayload().isEnableTransformation()) {
+                Map<String, PayloadTransformer.TransformationRule> transformationRules = convertTransformationRules();
+                payload = payloadTransformer.transform(payload, transformationRules);
+            }
+            
+            ComputeRequest request = ComputeRequest.newBuilder()
+                    .setInput(String.valueOf(payload.get("input")))
+                    .setIterations(((Number) payload.getOrDefault("iterations", 1000)).intValue())
+                    .setAlgorithm(String.valueOf(payload.getOrDefault("algorithm", "sha256")))
+                    .build();
+            
+            ComputeResponse response = blockingStub.computeHash(request);
+            
+            long endTime = System.nanoTime();
+            long latencyNanos = endTime - startTime;
+            
+            return CallResult.success(requestId, latencyNanos, response.toString().length());
+            
+        } catch (StatusRuntimeException e) {
+            long endTime = System.nanoTime();
+            long latencyNanos = endTime - startTime;
+            
+            logger.debug("Random ComputeHash request {} failed with status: {}", requestId, e.getStatus());
+            return CallResult.failure(requestId, latencyNanos, e.getStatus().getCode().value(), e.getMessage());
+        } catch (Exception e) {
+            long endTime = System.nanoTime();
+            long latencyNanos = endTime - startTime;
+            
+            logger.debug("Random ComputeHash request {} failed with exception: {}", requestId, e.getMessage());
+            return CallResult.failure(requestId, latencyNanos, -1, e.getMessage());
+        }
+    }
+    
+    private Map<String, PayloadTransformer.TransformationRule> convertTransformationRules() {
+        Map<String, PayloadTransformer.TransformationRule> rules = new HashMap<>();
+        
+        for (Map.Entry<String, LoadTestConfig.PayloadConfig.TransformationRuleConfig> entry : 
+             config.getPayload().getTransformationRules().entrySet()) {
+            
+            String fieldName = entry.getKey();
+            LoadTestConfig.PayloadConfig.TransformationRuleConfig ruleConfig = entry.getValue();
+            
+            PayloadTransformer.TransformationType type;
+            try {
+                type = PayloadTransformer.TransformationType.valueOf(ruleConfig.getType().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                type = PayloadTransformer.TransformationType.CUSTOM;
+            }
+            
+            PayloadTransformer.TransformationRule rule = new PayloadTransformer.TransformationRule(
+                type, null, ruleConfig.getParameters());
+            
+            rules.put(fieldName, rule);
+        }
+        
+        return rules;
     }
     
     /**
