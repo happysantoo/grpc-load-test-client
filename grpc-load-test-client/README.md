@@ -651,9 +651,20 @@ System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "debug");
 
 ## 📚 Documentation
 
+### Framework Documentation
 - [Framework README](FRAMEWORK_README.md) - Detailed framework documentation
 - [Refactoring Summary](REFACTORING_SUMMARY.md) - Migration guide from gRPC-specific to generic
+
+### Code Quality & Reviews
+- [Code Review](CODE_REVIEW.md) - Comprehensive code review and analysis
+- [Code Review Summary](CODE_REVIEW_SUMMARY.md) - Quick reference guide
 - [Code Review Fixes](CODE_REVIEW_FIXES_SUMMARY.md) - Code quality improvements
+- [Verification Report](CODE_REVIEW_VERIFICATION_REPORT.md) - Fix verification status
+
+### Performance & Architecture
+- **[Performance Analysis](PERFORMANCE_ANALYSIS.md)** - 🔥 **In-depth bottleneck analysis and optimization strategies**
+- **[Performance Tuning Guide](PERFORMANCE_TUNING_GUIDE.md)** - 🚀 **Practical tuning for faster run times**
+- **[Architecture Review](ARCHITECTURE_REVIEW.md)** - 🏛️ **Architectural assessment and design patterns**
 
 ## 🎯 Use Cases
 
