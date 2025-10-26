@@ -1,0 +1,11 @@
+1. code needs to be written in java. please conform to java 21.
+2. solution has to be implemented using virtual threads.
+3. It should implement systematic scaling rules :
+    a. warmup phase - a few slow requests with a frequency.
+    b. Ramp phase - it needs to slowly ramp traffic like n number of users per Second.
+    c. Sustaining phase - once reach maximum Concurrency , fire reeuests continously.
+4. There needs to be UI to setup scale rules and continously monitor the current latency , throughput , number of users firing etc. It has to show graphs and tabular format.
+5. There needs to be a controller layer to support all the UI funcationality. For this , a framework like spring boot can be used.
+6.  The interface that defines the task should be simple to support any benchmarking.
+
+

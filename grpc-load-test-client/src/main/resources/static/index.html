@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Test Framework - Dashboard</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="/webjars/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">⚡ Performance Test Framework</span>
+            <span class="navbar-text text-white" id="connection-status">
+                <span class="badge bg-secondary">Disconnected</span>
+            </span>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <!-- Configuration Panel -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Test Configuration</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="testConfigForm">
+                            <div class="mb-3">
+                                <label for="targetTps" class="form-label">Target TPS</label>
+                                <input type="number" class="form-control" id="targetTps" value="100" min="1" max="100000" required>
+                                <div class="form-text">Requests per second (1-100,000)</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="maxConcurrency" class="form-label">Max Concurrency</label>
+                                <input type="number" class="form-control" id="maxConcurrency" value="50" min="1" max="50000" required>
+                                <div class="form-text">Maximum parallel tasks (1-50,000)</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="testDuration" class="form-label">Test Duration (seconds)</label>
+                                <input type="number" class="form-control" id="testDuration" value="60" min="1" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="rampUpDuration" class="form-label">Ramp-Up Duration (seconds)</label>
+                                <input type="number" class="form-control" id="rampUpDuration" value="5" min="0" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="taskType" class="form-label">Task Type</label>
+                                <select class="form-select" id="taskType" required>
+                                    <option value="SLEEP">Sleep Task</option>
+                                    <option value="CPU">CPU Task</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="taskParameter" class="form-label">Task Parameter (ms)</label>
+                                <input type="number" class="form-control" id="taskParameter" value="100" min="1" required>
+                                <div class="form-text">Sleep duration or CPU work time</div>
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-success" id="startBtn">
+                                    <span class="spinner-border spinner-border-sm d-none" id="startSpinner"></span>
+                                    Start Test
+                                </button>
+                                <button type="button" class="btn btn-danger" id="stopBtn" disabled>Stop Test</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Active Tests List -->
+                <div class="card mt-3">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Active Tests</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="activeTestsList" class="list-group">
+                            <p class="text-muted">No active tests</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Metrics Dashboard -->
+            <div class="col-md-8">
+                <div id="noTestMessage" class="alert alert-info">
+                    <h4>Welcome to Performance Test Framework</h4>
+                    <p>Configure and start a test to see real-time metrics and charts.</p>
+                </div>
+
+                <div id="metricsPanel" class="d-none">
+                    <!-- Current Test Info -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0">Current Test: <span id="currentTestId"></span></h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="metric-card">
+                                        <div class="metric-label">Status</div>
+                                        <div class="metric-value" id="testStatus">-</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="metric-card">
+                                        <div class="metric-label">Elapsed Time</div>
+                                        <div class="metric-value" id="elapsedTime">0s</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="metric-card">
+                                        <div class="metric-label">Total Requests</div>
+                                        <div class="metric-value" id="totalRequests">0</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="metric-card">
+                                        <div class="metric-label">Success Rate</div>
+                                        <div class="metric-value" id="successRate">0%</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Real-time Metrics -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5 class="mb-0">Real-Time Metrics</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="metric-card">
+                                        <div class="metric-label">Current TPS</div>
+                                        <div class="metric-value text-primary" id="currentTps">0</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="metric-card">
+                                        <div class="metric-label">Active Tasks</div>
+                                        <div class="metric-value text-info" id="activeTasks">0</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="metric-card">
+                                        <div class="metric-label">Avg Latency</div>
+                                        <div class="metric-value text-warning" id="avgLatency">0ms</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5 class="mb-0">TPS Over Time</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="tpsChart" height="80"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5 class="mb-0">Latency Percentiles</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="latencyChart" height="80"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Percentile Table -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Latency Distribution</h5>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Percentile</th>
+                                        <th>Latency (ms)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="percentilesTable">
+                                    <tr><td>P50</td><td id="p50">-</td></tr>
+                                    <tr><td>P75</td><td id="p75">-</td></tr>
+                                    <tr><td>P90</td><td id="p90">-</td></tr>
+                                    <tr><td>P95</td><td id="p95">-</td></tr>
+                                    <tr><td>P99</td><td id="p99">-</td></tr>
+                                    <tr><td>P99.9</td><td id="p999">-</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- jQuery, Bootstrap, Chart.js, SockJS, STOMP -->
+    <script src="/webjars/jquery/3.7.1/jquery.min.js"></script>
+    <script src="/webjars/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="/webjars/chart.js/4.4.7/chart.umd.js"></script>
+    <script src="/webjars/sockjs-client/1.6.1/sockjs.min.js"></script>
+    <script src="/webjars/stomp-websocket/2.3.4/stomp.min.js"></script>
+    
+    <!-- Application Scripts -->
+    <script src="/js/websocket.js"></script>
+    <script src="/js/charts.js"></script>
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>

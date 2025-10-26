@@ -89,6 +89,15 @@ public class PerformanceTestRunner {
         }
     }
     
+    // Getters for accessing components
+    public VirtualThreadTaskExecutor getExecutor() {
+        return executor;
+    }
+    
+    public MetricsCollector getMetricsCollector() {
+        return metricsCollector;
+    }
+    
     public void close() {
         executor.close();
         metricsCollector.close();
