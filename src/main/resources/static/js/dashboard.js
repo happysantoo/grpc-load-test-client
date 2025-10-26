@@ -2,17 +2,37 @@
 let currentTest = null;
 let statusPollingInterval = null;
 
+// Update task parameter help text based on task type
+document.getElementById('taskType').addEventListener('change', function() {
+    const taskType = this.value;
+    const taskParameterInput = document.getElementById('taskParameter');
+    const helpText = document.getElementById('taskParameterHelp');
+    
+    if (taskType === 'HTTP') {
+        taskParameterInput.value = 'http://localhost:8081/api/products';
+        taskParameterInput.type = 'text';
+        helpText.textContent = 'URL to test (e.g., http://localhost:8081/api/products)';
+    } else {
+        taskParameterInput.value = '100';
+        taskParameterInput.type = 'number';
+        helpText.textContent = 'Sleep/CPU duration in ms';
+    }
+});
+
 // Handle form submission to start a test
 document.getElementById('testConfigForm').addEventListener('submit', async function(e) {
     e.preventDefault();
+    
+    const taskType = document.getElementById('taskType').value;
+    const taskParameterValue = document.getElementById('taskParameter').value;
     
     const config = {
         targetTps: parseInt(document.getElementById('targetTps').value),
         maxConcurrency: parseInt(document.getElementById('maxConcurrency').value),
         testDurationSeconds: parseInt(document.getElementById('testDuration').value),
         rampUpDurationSeconds: parseInt(document.getElementById('rampUpDuration').value),
-        taskType: document.getElementById('taskType').value,
-        taskParameter: parseInt(document.getElementById('taskParameter').value)
+        taskType: taskType,
+        taskParameter: taskType === 'HTTP' ? taskParameterValue : parseInt(taskParameterValue)
     };
     
     try {

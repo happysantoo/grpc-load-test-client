@@ -56,13 +56,14 @@
                                 <select class="form-select" id="taskType" required>
                                     <option value="SLEEP">Sleep Task</option>
                                     <option value="CPU">CPU Task</option>
+                                    <option value="HTTP">HTTP Request</option>
                                 </select>
                             </div>
                             
                             <div class="mb-3">
-                                <label for="taskParameter" class="form-label">Task Parameter (ms)</label>
-                                <input type="number" class="form-control" id="taskParameter" value="100" min="1" required>
-                                <div class="form-text">Sleep duration or CPU work time</div>
+                                <label for="taskParameter" class="form-label">Task Parameter</label>
+                                <input type="text" class="form-control" id="taskParameter" value="100" required>
+                                <div class="form-text" id="taskParameterHelp">Sleep/CPU duration in ms</div>
                             </div>
                             
                             <div class="d-grid gap-2">

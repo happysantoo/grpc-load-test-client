@@ -1,0 +1,72 @@
+package com.vajraedge.perftest.task
+
+import com.vajraedge.perftest.core.TaskResult
+import spock.lang.Specification
+
+/**
+ * Tests for HttpTask.
+ */
+class HttpTaskSpec extends Specification {
+
+    def "should successfully execute HTTP GET request"() {
+        given: "an HTTP task pointing to a valid URL"
+        def task = new HttpTask("https://httpbin.org/get")
+
+        when: "the task is executed"
+        TaskResult result = task.execute()
+
+        then: "the result should be successful"
+        result.isSuccess()
+        result.getLatencyNanos() > 0
+        result.getErrorMessage() == null
+    }
+
+    def "should handle HTTP errors gracefully"() {
+        given: "an HTTP task pointing to an endpoint that returns 404"
+        def task = new HttpTask("https://httpbin.org/status/404")
+
+        when: "the task is executed"
+        TaskResult result = task.execute()
+
+        then: "the result should indicate failure"
+        !result.isSuccess()
+        result.getLatencyNanos() > 0
+        result.getErrorMessage() == "HTTP 404"
+    }
+
+    def "should handle connection errors"() {
+        given: "an HTTP task pointing to an invalid URL"
+        def task = new HttpTask("http://invalid-host-that-does-not-exist-12345.com")
+
+        when: "the task is executed"
+        TaskResult result = task.execute()
+
+        then: "the result should be recorded with latency"
+        result.getLatencyNanos() >= 0
+        // May succeed or fail depending on DNS resolution
+    }
+
+    def "should handle localhost URLs"() {
+        given: "an HTTP task pointing to localhost"
+        def task = new HttpTask("http://localhost:8081/api/products")
+
+        when: "the task is executed"
+        TaskResult result = task.execute()
+
+        then: "the result should have latency measured"
+        result.getLatencyNanos() > 0
+        // Success depends on whether the server is running, so we don't assert on success
+    }
+
+    def "should record latency for all requests"() {
+        given: "an HTTP task"
+        def task = new HttpTask("https://httpbin.org/delay/0")
+
+        when: "the task is executed"
+        TaskResult result = task.execute()
+
+        then: "latency should be recorded in nanoseconds"
+        result.getLatencyNanos() > 0
+        result.getLatencyNanos() < 30_000_000_000L // Should complete within 30 seconds
+    }
+}

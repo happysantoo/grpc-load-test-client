@@ -28,7 +28,7 @@ public class TestConfigRequest {
     private Integer rampUpDurationSeconds;
     
     private String taskType = "SLEEP";
-    private Integer taskParameter = 10;
+    private Object taskParameter = 10; // Can be Integer for SLEEP/CPU or String for HTTP
     
     // Getters and Setters
     
@@ -72,11 +72,11 @@ public class TestConfigRequest {
         this.taskType = taskType;
     }
     
-    public Integer getTaskParameter() {
+    public Object getTaskParameter() {
         return taskParameter;
     }
     
-    public void setTaskParameter(Integer taskParameter) {
+    public void setTaskParameter(Object taskParameter) {
         this.taskParameter = taskParameter;
     }
 }

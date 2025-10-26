@@ -7,6 +7,7 @@ import com.vajraedge.perftest.dto.TestConfigRequest;
 import com.vajraedge.perftest.dto.TestStatusResponse;
 import com.vajraedge.perftest.runner.PerformanceTestRunner;
 import com.vajraedge.perftest.runner.TestResult;
+import com.vajraedge.perftest.task.HttpTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -143,12 +144,29 @@ public class TestExecutionService {
         return response;
     }
     
-    private TaskFactory createTaskFactory(String taskType, Integer taskParameter) {
+    private TaskFactory createTaskFactory(String taskType, Object taskParameter) {
         return switch (taskType.toUpperCase()) {
-            case "SLEEP" -> taskId -> createSleepTask(taskId, taskParameter);
+            case "SLEEP" -> taskId -> createSleepTask(taskId, getIntParameter(taskParameter));
             case "CPU" -> this::createCpuTask;
-            default -> taskId -> createSleepTask(taskId, taskParameter);
+            case "HTTP" -> taskId -> createHttpTask(getStringParameter(taskParameter));
+            default -> taskId -> createSleepTask(taskId, getIntParameter(taskParameter));
         };
+    }
+    
+    private int getIntParameter(Object param) {
+        if (param instanceof Integer) {
+            return (Integer) param;
+        } else if (param instanceof String) {
+            return Integer.parseInt((String) param);
+        }
+        return 100; // default
+    }
+    
+    private String getStringParameter(Object param) {
+        if (param instanceof String) {
+            return (String) param;
+        }
+        return "http://localhost:8081/api/products"; // default
     }
     
     private Task createSleepTask(long taskId, int sleepMs) {
@@ -180,6 +198,10 @@ public class TestExecutionService {
                 return SimpleTaskResult.failure(taskId, latency, e.getMessage());
             }
         };
+    }
+    
+    private Task createHttpTask(String url) {
+        return new HttpTask(url);
     }
     
     /**
