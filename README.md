@@ -1,4 +1,18 @@
-# VajraEdge - High-Performance Load Testing Framework
+<div align="center">
+  <img src="vajraedge_logo.png" alt="VajraEdge Logo" width="400"/>
+  
+  # VajraEdge
+  ### High-Performance Load Testing Framework
+  
+  [![Java 21](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.java.net/projects/jdk/21/)
+  [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.7-brightgreen.svg)](https://spring.io/projects/spring-boot)
+  [![Virtual Threads](https://img.shields.io/badge/Virtual%20Threads-Enabled-blue.svg)](https://openjdk.org/jeps/444)
+  
+  **Modern • Production-Ready • Real-Time Metrics**
+  
+</div>
+
+---
 
 ## 🚀 What is VajraEdge?
 
