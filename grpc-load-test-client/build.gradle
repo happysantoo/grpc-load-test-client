@@ -1,9 +1,10 @@
 plugins {
     id 'java'
+    id 'groovy'
     id 'application'
     id 'org.springframework.boot' version '3.5.7'
     id 'io.spring.dependency-management' version '1.1.7'
-    // id 'jacoco' // Disabled due to Java 23 compatibility issues
+    id 'jacoco'
 }
 
 group = 'com.example'
@@ -17,11 +18,12 @@ java {
 repositories {
     mavenCentral()
 }
-
 ext {
     grpcVersion = '1.70.0'
     protobufVersion = '4.29.2'
     junitVersion = '5.11.3'
+    spockVersion = '2.4-M4-groovy-4.0'
+    groovyVersion = '4.0.23'
     chartjsVersion = '4.4.7'
     bootstrapVersion = '5.3.3'
     jqueryVersion = '3.7.1'
@@ -53,24 +55,47 @@ dependencies {
     implementation 'org.webjars.npm:sockjs-client:1.6.1'
     implementation 'org.webjars:stomp-websocket:2.3.4'
     
-    // Development tools
-    developmentOnly 'org.springframework.boot:spring-boot-devtools'
-    
     // Testing
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
     testImplementation "io.grpc:grpc-testing:${grpcVersion}"
     testImplementation 'org.assertj:assertj-core:3.26.3'
     testImplementation 'org.awaitility:awaitility:4.2.2'
+    
+    // Spock Framework
+    testImplementation "org.spockframework:spock-core:${spockVersion}"
+    testImplementation "org.spockframework:spock-spring:${spockVersion}"
+    testImplementation "org.apache.groovy:groovy:${groovyVersion}"
+    testImplementation "org.apache.groovy:groovy-json:${groovyVersion}"
 }
-
-application {
-    mainClass = 'com.example.perftest.Application'
-}
-
 test {
     useJUnitPlatform()
+    finalizedBy jacocoTestReport
 }
 
-// JaCoCo test coverage temporarily disabled due to Java 23 compatibility issues
-// Will be re-enabled once JaCoCo supports Java 23
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                '**/Application.class',
+                '**/Main.class'
+            ])
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.90
+            }
+        }
+    }
+}
