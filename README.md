@@ -1,5 +1,9 @@
 <div align="center">
-  <img src="vajraedge_logo.png" alt="VajraEdge Logo" width="400"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="vajraedge_logo.png">
+    <source media="(prefers-color-scheme: light)" srcset="vajraedge_logo.png">
+    <img src="vajraedge_logo.png" alt="VajraEdge Logo" width="400" style="background-color: white; padding: 20px; border-radius: 10px;"/>
+  </picture>
   
   # VajraEdge
   ### High-Performance Load Testing Framework
