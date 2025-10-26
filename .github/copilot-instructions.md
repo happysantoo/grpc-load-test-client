@@ -539,6 +539,9 @@ Before completing any task, verify:
 3. Run tests after each change
 4. Commit with message: `refactor: [description of refactoring]`
 
+##Documentation
+1. Make sure to place all the new documentation files in the `documents/` folder. This includes the relevant phase summaries, code review documents, and any action items.
+
 ---
 
 **Last Updated**: October 26, 2025  

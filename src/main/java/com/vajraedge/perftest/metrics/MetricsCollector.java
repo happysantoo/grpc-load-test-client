@@ -85,7 +85,7 @@ public class MetricsCollector implements AutoCloseable {
         double avgLatencyMs = total > 0 ? (totalLatencyNanos.doubleValue() / 1_000_000.0) / total : 0.0;
         double successRate = total > 0 ? (successful * 100.0) / total : 0.0;
         
-        PercentileStats percentiles = calculatePercentiles(new double[]{0.5, 0.75, 0.9, 0.95, 0.99});
+        PercentileStats percentiles = calculatePercentiles(new double[]{0.5, 0.75, 0.9, 0.95, 0.99, 0.999});
         
         Map<String, Long> errorSnapshot = new HashMap<>();
         errorCounts.forEach((error, count) -> errorSnapshot.put(error, count.get()));
@@ -119,6 +119,8 @@ public class MetricsCollector implements AutoCloseable {
         for (int i = 0; i < percentiles.length; i++) {
             results[i] = percentileCalculator.evaluate(percentiles[i] * 100);
         }
+        
+        logger.debug("Calculated percentiles from {} latency samples", latencies.size());
         
         return new PercentileStats(percentiles, results);
     }

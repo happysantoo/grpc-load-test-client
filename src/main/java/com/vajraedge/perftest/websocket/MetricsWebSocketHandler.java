@@ -52,8 +52,19 @@ public class MetricsWebSocketHandler {
                 // Broadcast to topic for this specific test
                 messagingTemplate.convertAndSend("/topic/metrics/" + testId, metrics);
                 
-                logger.debug("Broadcasted metrics for test {}: TPS={}, Active={}",
-                    testId, metrics.getCurrentTps(), metrics.getActiveTasks());
+                if (metrics.getTotalRequests() != null && metrics.getTotalRequests() > 0) {
+                    logger.debug("Broadcasted metrics for test {}: TPS={}, Total={}, Active={}, P50={}, P95={}",
+                        testId, 
+                        String.format("%.2f", metrics.getCurrentTps()), 
+                        metrics.getTotalRequests(),
+                        metrics.getActiveTasks(),
+                        metrics.getLatencyPercentiles() != null ? 
+                            String.format("%.2f", metrics.getLatencyPercentiles().get("p50")) : "null",
+                        metrics.getLatencyPercentiles() != null ? 
+                            String.format("%.2f", metrics.getLatencyPercentiles().get("p95")) : "null");
+                } else {
+                    logger.debug("Metrics for test {} have zero requests", testId);
+                }
                 
             } catch (Exception e) {
                 logger.error("Error broadcasting metrics for test {}", testId, e);

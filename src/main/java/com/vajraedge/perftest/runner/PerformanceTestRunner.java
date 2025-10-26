@@ -62,6 +62,10 @@ public class PerformanceTestRunner {
             
             future.thenAccept(result -> {
                 metricsCollector.recordResult(result);
+                if (taskId % 100 == 0) {
+                    logger.debug("Recorded result for task {}: success={}, latency={}ms", 
+                        taskId, result.isSuccess(), result.getLatencyMs());
+                }
             }).exceptionally(throwable -> {
                 logger.debug("Task {} failed with exception", taskId, throwable);
                 return null;
