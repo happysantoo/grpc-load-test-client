@@ -5,7 +5,7 @@
     <img src="logo_bright.png" alt="VajraEdge Logo" width="400"/>
   </picture>
   
-  # VajraEdge
+  
   ### High-Performance Load Testing Framework
   
   [![Java 21](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.java.net/projects/jdk/21/)
