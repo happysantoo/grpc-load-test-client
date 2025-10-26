@@ -1,8 +1,8 @@
 <div align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="vajraedge_logo.png">
-    <source media="(prefers-color-scheme: light)" srcset="vajraedge_logo.png">
-    <img src="vajraedge_logo.png" alt="VajraEdge Logo" width="400" style="background-color: white; padding: 20px; border-radius: 10px;"/>
+    <source media="(prefers-color-scheme: dark)" srcset="logo_dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="logo_bright.png">
+    <img src="logo_bright.png" alt="VajraEdge Logo" width="400"/>
   </picture>
   
   # VajraEdge
