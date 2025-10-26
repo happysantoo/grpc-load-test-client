@@ -1,4 +1,4 @@
-# VajraEdge: My Journey Building a Modern Load Testing Framework with Java 21
+# VajraEdge: Building a Modern Load Testing Framework with Java 21+
 
 ## The Problem That Started It All
 
