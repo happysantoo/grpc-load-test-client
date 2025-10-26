@@ -52,6 +52,7 @@ function subscribeToMetrics(testId) {
     // Subscribe to metrics updates
     metricsSubscription = stompClient.subscribe('/topic/metrics/' + testId, function(message) {
         const metrics = JSON.parse(message.body);
+        console.log('Received metrics update:', metrics);
         updateMetricsDisplay(metrics);
         updateCharts(metrics);
     });

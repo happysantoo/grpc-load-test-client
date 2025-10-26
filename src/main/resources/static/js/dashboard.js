@@ -202,7 +202,8 @@ async function loadActiveTests() {
             listContainer.innerHTML = '<p class="text-muted">No active tests</p>';
         } else {
             listContainer.innerHTML = '';
-            Object.entries(data.activeTests).forEach(([testId, test]) => {
+            // Backend returns Map<String, String> where value is just the status
+            Object.entries(data.activeTests).forEach(([testId, status]) => {
                 const item = document.createElement('div');
                 item.className = 'list-group-item list-group-item-action';
                 item.innerHTML = `
@@ -210,10 +211,10 @@ async function loadActiveTests() {
                         <h6 class="mb-1">${testId.substring(0, 8)}</h6>
                         <small class="status-running">●</small>
                     </div>
-                    <small class="text-muted">${test.config.taskType} - ${test.config.targetTps} TPS</small>
+                    <small class="text-muted">${status}</small>
                 `;
                 item.addEventListener('click', () => {
-                    currentTest = { testId: testId, config: test.config };
+                    currentTest = { testId: testId };
                     subscribeToMetrics(testId);
                     document.getElementById('noTestMessage').classList.add('d-none');
                     document.getElementById('metricsPanel').classList.remove('d-none');

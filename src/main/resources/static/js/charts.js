@@ -114,7 +114,12 @@ function initializeCharts() {
 // Update charts with new metrics
 function updateCharts(metrics) {
     if (!tpsChart || !latencyChart) {
-        return;
+        console.warn('Charts not initialized yet, attempting initialization...');
+        initializeCharts();
+        if (!tpsChart || !latencyChart) {
+            console.error('Failed to initialize charts');
+            return;
+        }
     }
 
     const timestamp = new Date().toLocaleTimeString();
@@ -145,6 +150,8 @@ function updateCharts(metrics) {
         }
 
         latencyChart.update('none');
+    } else {
+        console.warn('No latency percentiles in metrics:', metrics);
     }
 }
 
