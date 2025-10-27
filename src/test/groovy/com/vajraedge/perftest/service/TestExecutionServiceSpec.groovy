@@ -27,12 +27,15 @@ class TestExecutionServiceSpec extends Specification {
     def "should start test and generate unique test ID"() {
         given:
         TestConfigRequest config = new TestConfigRequest()
+        config.setMode(com.vajraedge.perftest.concurrency.LoadTestMode.CONCURRENCY_BASED)
         config.setTaskType("SLEEP")
         config.setTaskParameter(10)
+        config.setStartingConcurrency(5)
         config.setMaxConcurrency(5)
-        config.setTargetTps(50)
+        config.setRampStrategyType(com.vajraedge.perftest.concurrency.RampStrategyType.STEP)
+        config.setRampStep(5)
+        config.setRampIntervalSeconds(30L)
         config.setTestDurationSeconds(2)
-        config.setRampUpDurationSeconds(0)
 
         when:
         String testId = service.startTest(config)
@@ -198,7 +201,7 @@ class TestExecutionServiceSpec extends Specification {
         then:
         testId != null
         status != null
-        status.getConfiguration().getRampUpDurationSeconds() == 2
+        status.getConfiguration().getRampStrategyType() != null
 
         cleanup:
         service.stopTest(testId)
@@ -275,9 +278,9 @@ class TestExecutionServiceSpec extends Specification {
         status.getConfiguration().getTaskType() == "SLEEP"
         status.getConfiguration().getTaskParameter() == 50
         status.getConfiguration().getMaxConcurrency() == 20
-        status.getConfiguration().getTargetTps() == 100
+        status.getConfiguration().getMode() == com.vajraedge.perftest.concurrency.LoadTestMode.CONCURRENCY_BASED
         status.getConfiguration().getTestDurationSeconds() == 10
-        status.getConfiguration().getRampUpDurationSeconds() == 3
+        status.getConfiguration().getRampStrategyType() != null
 
         cleanup:
         service.stopTest(testId)
@@ -319,9 +322,10 @@ class TestExecutionServiceSpec extends Specification {
                                           int maxConcurrency, int targetTps, 
                                           int testDurationSeconds, int rampUpDurationSeconds) {
         TestConfigRequest config = new TestConfigRequest()
+        config.setMode(com.vajraedge.perftest.concurrency.LoadTestMode.CONCURRENCY_BASED)
         config.setTaskType(taskType)
         config.setTaskParameter(taskParameter)
-        config.setStartingConcurrency(10)
+        config.setStartingConcurrency(Math.min(1, maxConcurrency))  // Start at 1 or maxConcurrency if less
         config.setMaxConcurrency(maxConcurrency)
         config.setTestDurationSeconds(testDurationSeconds)
         config.setRampStrategyType(com.vajraedge.perftest.concurrency.RampStrategyType.STEP)

@@ -1,6 +1,8 @@
 package com.vajraedge.perftest.service
 
 import com.vajraedge.perftest.dto.TestConfigRequest
+import com.vajraedge.perftest.concurrency.LoadTestMode
+import com.vajraedge.perftest.concurrency.RampStrategyType
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import spock.lang.Specification
@@ -21,10 +23,13 @@ class TestExecutionServiceSimpleSpec extends Specification {
         TestConfigRequest config = new TestConfigRequest()
         config.setTaskType("SLEEP")
         config.setTaskParameter(10)
+        config.setMode(LoadTestMode.CONCURRENCY_BASED)
+        config.setStartingConcurrency(5)
         config.setMaxConcurrency(5)
-        config.setTargetTps(50)
+        config.setRampStrategyType(RampStrategyType.STEP)
+        config.setRampStep(5)
+        config.setRampIntervalSeconds(30L)
         config.setTestDurationSeconds(2)
-        config.setRampUpDurationSeconds(0)
 
         when: "test is started"
         String testId = service.startTest(config)
@@ -44,10 +49,13 @@ class TestExecutionServiceSimpleSpec extends Specification {
         TestConfigRequest config = new TestConfigRequest()
         config.setTaskType("SLEEP")
         config.setTaskParameter(10)
+        config.setMode(LoadTestMode.CONCURRENCY_BASED)
+        config.setStartingConcurrency(5)
         config.setMaxConcurrency(5)
-        config.setTargetTps(50)
+        config.setRampStrategyType(RampStrategyType.STEP)
+        config.setRampStep(5)
+        config.setRampIntervalSeconds(30L)
         config.setTestDurationSeconds(5)
-        config.setRampUpDurationSeconds(0)
         String testId = service.startTest(config)
 
         when: "status is queried"
@@ -67,10 +75,13 @@ class TestExecutionServiceSimpleSpec extends Specification {
         TestConfigRequest config = new TestConfigRequest()
         config.setTaskType("SLEEP")
         config.setTaskParameter(10)
+        config.setMode(LoadTestMode.CONCURRENCY_BASED)
+        config.setStartingConcurrency(5)
         config.setMaxConcurrency(5)
-        config.setTargetTps(50)
+        config.setRampStrategyType(RampStrategyType.STEP)
+        config.setRampStep(5)
+        config.setRampIntervalSeconds(30L)
         config.setTestDurationSeconds(10)
-        config.setRampUpDurationSeconds(0)
         String testId = service.startTest(config)
         Thread.sleep(500)
 
