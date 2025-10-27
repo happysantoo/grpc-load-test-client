@@ -34,6 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TestExecutionService {
     
     private static final Logger logger = LoggerFactory.getLogger(TestExecutionService.class);
+    private static final int MAX_CONCURRENT_TESTS = 10;
     
     private final Map<String, TestExecution> activeTests = new ConcurrentHashMap<>();
     private final Map<String, TestResult> completedTests = new ConcurrentHashMap<>();
@@ -44,8 +45,19 @@ public class TestExecutionService {
     
     /**
      * Start a new performance test.
+     * 
+     * @param config test configuration
+     * @return test ID
+     * @throws IllegalStateException if maximum concurrent tests limit is reached
      */
     public String startTest(TestConfigRequest config) {
+        // DoS protection: limit number of concurrent tests
+        if (activeTests.size() >= MAX_CONCURRENT_TESTS) {
+            throw new IllegalStateException(
+                String.format("Maximum concurrent tests limit reached (%d). Please wait for existing tests to complete.",
+                    MAX_CONCURRENT_TESTS));
+        }
+        
         String testId = UUID.randomUUID().toString();
         logger.info("Starting test {} with config: {}", testId, config);
         
