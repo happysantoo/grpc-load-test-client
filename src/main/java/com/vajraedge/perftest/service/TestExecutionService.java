@@ -119,6 +119,20 @@ public class TestExecutionService {
         return result;
     }
     
+    /**
+     * Get current metrics for a specific test (debug).
+     */
+    public Object getCurrentMetrics(String testId) {
+        TestExecution execution = activeTests.get(testId);
+        if (execution == null) {
+            return null;
+        }
+        
+        var snapshot = execution.getRunner().getMetricsCollector().getSnapshot();
+        var metricsService = new MetricsService();
+        return metricsService.convertToResponse(testId, snapshot);
+    }
+    
     private TestStatusResponse buildStatusResponse(TestExecution execution) {
         TestStatusResponse response = new TestStatusResponse();
         response.setTestId(execution.getTestId());

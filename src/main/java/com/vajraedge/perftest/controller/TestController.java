@@ -113,4 +113,24 @@ public class TestController {
         
         return ResponseEntity.ok(response);
     }
+    
+    /**
+     * Get current metrics for a specific test (debug endpoint).
+     * 
+     * GET /api/tests/{id}/metrics
+     */
+    @GetMapping("/{id}/metrics")
+    public ResponseEntity<?> getTestMetrics(@PathVariable String id) {
+        logger.debug("Getting metrics for test: {}", id);
+        
+        var metrics = testExecutionService.getCurrentMetrics(id);
+        if (metrics != null) {
+            return ResponseEntity.ok(metrics);
+        } else {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "Test not found or no metrics available");
+            error.put("testId", id);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+        }
+    }
 }

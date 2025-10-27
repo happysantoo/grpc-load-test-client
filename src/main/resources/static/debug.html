@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Debug</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        #log { border: 1px solid #ccc; padding: 10px; height: 500px; overflow-y: scroll; background: #f5f5f5; }
+        .info { color: blue; }
+        .success { color: green; }
+        .error { color: red; }
+        .data { color: purple; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Debug Page</h1>
+    
+    <div>
+        <button onclick="connectWS()">Connect WebSocket</button>
+        <button onclick="subscribeToTest()">Subscribe to Test</button>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+    
+    <div>
+        <label>Test ID: <input type="text" id="testId" size="40" placeholder="Enter test ID"></label>
+    </div>
+    
+    <h2>Log:</h2>
+    <div id="log"></div>
+
+    <script src="/webjars/sockjs-client/1.6.1/dist/sockjs.min.js"></script>
+    <script src="/webjars/stomp-websocket/2.3.4/stomp.min.js"></script>
+    
+    <script>
+        let stompClient = null;
+        let subscription = null;
+        
+        function log(message, className = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        function connectWS() {
+            log('Connecting to WebSocket...', 'info');
+            
+            const socket = new SockJS('/ws');
+            stompClient = Stomp.over(socket);
+            
+            stompClient.debug = function(str) {
+                log('STOMP: ' + str, 'info');
+            };
+            
+            stompClient.connect({}, function(frame) {
+                log('Connected: ' + frame, 'success');
+            }, function(error) {
+                log('Error: ' + error, 'error');
+            });
+        }
+        
+        function subscribeToTest() {
+            if (!stompClient || !stompClient.connected) {
+                log('Not connected! Click Connect first.', 'error');
+                return;
+            }
+            
+            const testId = document.getElementById('testId').value;
+            if (!testId) {
+                log('Please enter a test ID', 'error');
+                return;
+            }
+            
+            if (subscription) {
+                subscription.unsubscribe();
+            }
+            
+            const topic = '/topic/metrics/' + testId;
+            log('Subscribing to: ' + topic, 'info');
+            
+            subscription = stompClient.subscribe(topic, function(message) {
+                log('Received message:', 'success');
+                const data = JSON.parse(message.body);
+                log(JSON.stringify(data, null, 2), 'data');
+            });
+        }
+        
+        // Auto-connect on load
+        window.addEventListener('load', function() {
+            log('Page loaded. Click "Connect WebSocket" to start.', 'info');
+        });
+    </script>
+</body>
+</html>
