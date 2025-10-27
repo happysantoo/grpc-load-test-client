@@ -6,11 +6,14 @@ let statusSubscription = null;
 
 // Initialize WebSocket connection
 function connect() {
+    console.log('Attempting to connect to WebSocket...');
     const socket = new SockJS('/ws');
     stompClient = Stomp.over(socket);
     
-    // Disable debug logging in production
-    stompClient.debug = null;
+    // Enable debug logging temporarily
+    stompClient.debug = function(str) {
+        console.log('STOMP: ' + str);
+    };
     
     stompClient.connect({}, function(frame) {
         console.log('Connected: ' + frame);

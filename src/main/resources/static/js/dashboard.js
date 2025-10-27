@@ -125,6 +125,8 @@ document.getElementById('stopBtn').addEventListener('click', async function() {
 
 // Update metrics display from WebSocket data
 function updateMetricsDisplay(metrics) {
+    console.log('Updating metrics display:', metrics);
+    
     // Update counters
     document.getElementById('totalRequests').textContent = formatNumber(metrics.totalRequests || 0);
     document.getElementById('currentTps').textContent = formatNumber(metrics.currentTps || 0);
@@ -138,12 +140,15 @@ function updateMetricsDisplay(metrics) {
     
     // Update percentiles table
     if (metrics.latencyPercentiles) {
+        console.log('Updating percentiles:', metrics.latencyPercentiles);
         document.getElementById('p50').textContent = formatLatency(metrics.latencyPercentiles.p50);
         document.getElementById('p75').textContent = formatLatency(metrics.latencyPercentiles.p75);
         document.getElementById('p90').textContent = formatLatency(metrics.latencyPercentiles.p90);
         document.getElementById('p95').textContent = formatLatency(metrics.latencyPercentiles.p95);
         document.getElementById('p99').textContent = formatLatency(metrics.latencyPercentiles.p99);
         document.getElementById('p999').textContent = formatLatency(metrics.latencyPercentiles['p99.9']);
+    } else {
+        console.warn('No latency percentiles in metrics');
     }
     
     // Update elapsed time

@@ -113,6 +113,8 @@ function initializeCharts() {
 
 // Update charts with new metrics
 function updateCharts(metrics) {
+    console.log('updateCharts called with:', metrics);
+    
     if (!tpsChart || !latencyChart) {
         console.warn('Charts not initialized yet, attempting initialization...');
         initializeCharts();
