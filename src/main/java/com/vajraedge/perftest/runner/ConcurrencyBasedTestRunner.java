@@ -58,7 +58,8 @@ public class ConcurrencyBasedTestRunner {
         this.metricsCollector = new MetricsCollector();
         this.taskIdGenerator = new AtomicLong(0);
         this.stopRequested = new AtomicBoolean(false);
-        this.activeUsers = new ArrayList<>();
+        // Pre-allocate ArrayList to max capacity to avoid resizing during ramp-up
+        this.activeUsers = new ArrayList<>(concurrencyController.getMaxConcurrency());
         
         logger.info("Concurrency-based test runner initialized with strategy: {}",
             concurrencyController.getRampStrategy().getDescription());
@@ -122,29 +123,31 @@ public class ConcurrencyBasedTestRunner {
      * @param targetConcurrency desired number of virtual users
      */
     private void adjustConcurrency(int targetConcurrency) {
-        int currentConcurrency = activeUsers.size();
-        
-        if (targetConcurrency > currentConcurrency) {
-            // Ramp up: add users
-            int toAdd = targetConcurrency - currentConcurrency;
-            logger.debug("Ramping up: adding {} virtual users (current: {}, target: {})",
-                toAdd, currentConcurrency, targetConcurrency);
+        synchronized (activeUsers) {
+            int currentConcurrency = activeUsers.size();
             
-            for (int i = 0; i < toAdd; i++) {
-                VirtualUser user = new VirtualUser();
-                activeUsers.add(user);
-                user.start();
-            }
-        } else if (targetConcurrency < currentConcurrency) {
-            // Ramp down: remove users
-            int toRemove = currentConcurrency - targetConcurrency;
-            logger.debug("Ramping down: removing {} virtual users (current: {}, target: {})",
-                toRemove, currentConcurrency, targetConcurrency);
-            
-            for (int i = 0; i < toRemove; i++) {
-                if (!activeUsers.isEmpty()) {
-                    VirtualUser user = activeUsers.remove(activeUsers.size() - 1);
-                    user.stop();
+            if (targetConcurrency > currentConcurrency) {
+                // Ramp up: add users
+                int toAdd = targetConcurrency - currentConcurrency;
+                logger.debug("Ramping up: adding {} virtual users (current: {}, target: {})",
+                    toAdd, currentConcurrency, targetConcurrency);
+                
+                for (int i = 0; i < toAdd; i++) {
+                    VirtualUser user = new VirtualUser();
+                    activeUsers.add(user);
+                    user.start();
+                }
+            } else if (targetConcurrency < currentConcurrency) {
+                // Ramp down: remove users
+                int toRemove = currentConcurrency - targetConcurrency;
+                logger.debug("Ramping down: removing {} virtual users (current: {}, target: {})",
+                    toRemove, currentConcurrency, targetConcurrency);
+                
+                for (int i = 0; i < toRemove; i++) {
+                    if (!activeUsers.isEmpty()) {
+                        VirtualUser user = activeUsers.remove(activeUsers.size() - 1);
+                        user.stop();
+                    }
                 }
             }
         }
@@ -154,13 +157,15 @@ public class ConcurrencyBasedTestRunner {
      * Shutdown all active virtual users.
      */
     private void shutdownAllUsers() {
-        logger.info("Shutting down {} virtual users", activeUsers.size());
-        
-        for (VirtualUser user : activeUsers) {
-            user.stop();
+        synchronized (activeUsers) {
+            logger.info("Shutting down {} virtual users", activeUsers.size());
+            
+            for (VirtualUser user : activeUsers) {
+                user.stop();
+            }
+            
+            activeUsers.clear();
         }
-        
-        activeUsers.clear();
         executor.close();
     }
     
