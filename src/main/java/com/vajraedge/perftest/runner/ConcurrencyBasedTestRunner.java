@@ -76,8 +76,6 @@ public class ConcurrencyBasedTestRunner {
         long startTime = System.currentTimeMillis();
         long endTime = startTime + testDuration.toMillis();
         
-        metricsCollector.startMeasurement();
-        
         try {
             // Main control loop
             while (!stopRequested.get() && System.currentTimeMillis() < endTime) {
@@ -101,7 +99,6 @@ public class ConcurrencyBasedTestRunner {
         } finally {
             stopRequested.set(true);
             shutdownAllUsers();
-            metricsCollector.stopMeasurement();
         }
         
         long duration = System.currentTimeMillis() - startTime;
@@ -164,7 +161,7 @@ public class ConcurrencyBasedTestRunner {
         }
         
         activeUsers.clear();
-        executor.shutdown();
+        executor.close();
     }
     
     /**
@@ -176,9 +173,16 @@ public class ConcurrencyBasedTestRunner {
     private TestResult buildTestResult(long durationMs) {
         return new TestResult(
             metricsCollector.getSnapshot(),
-            Duration.ofMillis(durationMs),
-            true
+            Duration.ofMillis(durationMs)
         );
+    }
+    
+    /**
+     * Close the runner and release resources.
+     */
+    public void close() {
+        stop();
+        executor.close();
     }
     
     public MetricsCollector getMetricsCollector() {
@@ -198,7 +202,7 @@ public class ConcurrencyBasedTestRunner {
         
         VirtualUser() {
             this.running = new AtomicBoolean(true);
-            this.future = CompletableFuture.runAsync(this::run, executor.getExecutor());
+            this.future = CompletableFuture.runAsync(this::run);
         }
         
         void run() {
