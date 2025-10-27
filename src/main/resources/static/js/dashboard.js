@@ -2,6 +2,33 @@
 let currentTest = null;
 let statusPollingInterval = null;
 
+// Handle test mode change
+document.getElementById('testMode').addEventListener('change', function() {
+    const mode = this.value;
+    const tpsLimitField = document.getElementById('tpsLimitField');
+    
+    if (mode === 'RATE_LIMITED') {
+        tpsLimitField.classList.remove('d-none');
+    } else {
+        tpsLimitField.classList.add('d-none');
+    }
+});
+
+// Handle ramp strategy change
+document.getElementById('rampStrategy').addEventListener('change', function() {
+    const strategy = this.value;
+    const stepFields = document.getElementById('stepStrategyFields');
+    const linearFields = document.getElementById('linearStrategyFields');
+    
+    if (strategy === 'STEP') {
+        stepFields.classList.remove('d-none');
+        linearFields.classList.add('d-none');
+    } else {
+        stepFields.classList.add('d-none');
+        linearFields.classList.remove('d-none');
+    }
+});
+
 // Update task parameter help text based on task type
 document.getElementById('taskType').addEventListener('change', function() {
     const taskType = this.value;
@@ -25,15 +52,35 @@ document.getElementById('testConfigForm').addEventListener('submit', async funct
     
     const taskType = document.getElementById('taskType').value;
     const taskParameterValue = document.getElementById('taskParameter').value;
+    const testMode = document.getElementById('testMode').value;
+    const rampStrategy = document.getElementById('rampStrategy').value;
     
+    // Build config based on selected mode and strategy
     const config = {
-        targetTps: parseInt(document.getElementById('targetTps').value),
+        mode: testMode,
+        startingConcurrency: parseInt(document.getElementById('startingConcurrency').value),
         maxConcurrency: parseInt(document.getElementById('maxConcurrency').value),
+        rampStrategyType: rampStrategy,
         testDurationSeconds: parseInt(document.getElementById('testDuration').value),
-        rampUpDurationSeconds: parseInt(document.getElementById('rampUpDuration').value),
         taskType: taskType,
         taskParameter: taskType === 'HTTP' ? taskParameterValue : parseInt(taskParameterValue)
     };
+    
+    // Add strategy-specific fields
+    if (rampStrategy === 'STEP') {
+        config.rampStep = parseInt(document.getElementById('rampStep').value);
+        config.rampIntervalSeconds = parseInt(document.getElementById('rampInterval').value);
+    } else {
+        config.rampDurationSeconds = parseInt(document.getElementById('rampDuration').value);
+    }
+    
+    // Add TPS limit for hybrid mode
+    if (testMode === 'RATE_LIMITED') {
+        const maxTpsLimit = document.getElementById('maxTpsLimit').value;
+        if (maxTpsLimit) {
+            config.maxTpsLimit = parseInt(maxTpsLimit);
+        }
+    }
     
     try {
         document.getElementById('startBtn').disabled = true;
