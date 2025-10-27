@@ -173,7 +173,10 @@ public class TestExecutionService {
         response.setEndTime(execution.getEndTime());
         response.setConfiguration(execution.getConfig());
         
-        long elapsed = Duration.between(execution.getStartTime(), LocalDateTime.now()).getSeconds();
+        // Use endTime if test is completed, otherwise use current time
+        LocalDateTime timeToUse = execution.getEndTime() != null ? 
+                execution.getEndTime() : LocalDateTime.now();
+        long elapsed = Duration.between(execution.getStartTime(), timeToUse).getSeconds();
         response.setElapsedSeconds(elapsed);
         
         // Build current metrics

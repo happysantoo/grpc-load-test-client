@@ -123,7 +123,7 @@ document.getElementById('testConfigForm').addEventListener('submit', async funct
         }
         
         // Update UI
-        document.getElementById('currentTestId').textContent = result.testId.substring(0, 8);
+        document.getElementById('currentTestId').textContent = result.testId;
         document.getElementById('testStatus').textContent = 'RUNNING';
         document.getElementById('stopBtn').disabled = false;
         
