@@ -112,9 +112,10 @@ function initializeCharts() {
 }
 
 // Update charts with new metrics
-function updateCharts(metrics) {
+window.updateCharts = function updateCharts(metrics) {
     console.log('updateCharts called with:', metrics);
     
+    try {
     if (!tpsChart || !latencyChart) {
         console.warn('Charts not initialized yet, attempting initialization...');
         initializeCharts();
@@ -155,10 +156,13 @@ function updateCharts(metrics) {
     } else {
         console.warn('No latency percentiles in metrics:', metrics);
     }
+    } catch (error) {
+        console.error('Error in updateCharts:', error);
+    }
 }
 
 // Reset charts when starting a new test
-function resetCharts() {
+window.resetCharts = function resetCharts() {
     if (tpsChart) {
         tpsChart.data.labels = [];
         tpsChart.data.datasets[0].data = [];

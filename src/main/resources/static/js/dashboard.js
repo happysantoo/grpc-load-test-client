@@ -124,14 +124,15 @@ document.getElementById('stopBtn').addEventListener('click', async function() {
 });
 
 // Update metrics display from WebSocket data
-function updateMetricsDisplay(metrics) {
+window.updateMetricsDisplay = function updateMetricsDisplay(metrics) {
     console.log('Updating metrics display:', metrics);
     
-    // Update counters
-    document.getElementById('totalRequests').textContent = formatNumber(metrics.totalRequests || 0);
-    document.getElementById('currentTps').textContent = formatNumber(metrics.currentTps || 0);
-    document.getElementById('activeTasks').textContent = formatNumber(metrics.activeTasks || 0);
-    document.getElementById('avgLatency').textContent = formatLatency(metrics.avgLatencyMs || 0);
+    try {
+        // Update counters
+        document.getElementById('totalRequests').textContent = formatNumber(metrics.totalRequests || 0);
+        document.getElementById('currentTps').textContent = formatNumber(metrics.currentTps || 0);
+        document.getElementById('activeTasks').textContent = formatNumber(metrics.activeTasks || 0);
+        document.getElementById('avgLatency').textContent = formatLatency(metrics.avgLatencyMs || 0);
     
     // Update success rate
     if (metrics.successRate !== undefined && metrics.successRate !== null) {
@@ -155,6 +156,9 @@ function updateMetricsDisplay(metrics) {
     if (currentTest) {
         const elapsed = Math.floor((new Date() - currentTest.startTime) / 1000);
         document.getElementById('elapsedTime').textContent = formatDuration(elapsed);
+    }
+    } catch (error) {
+        console.error('Error in updateMetricsDisplay:', error);
     }
 }
 

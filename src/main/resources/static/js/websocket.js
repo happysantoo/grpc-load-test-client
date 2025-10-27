@@ -36,9 +36,15 @@ function disconnect() {
 }
 
 // Subscribe to metrics for a specific test
-function subscribeToMetrics(testId) {
+window.subscribeToMetrics = function subscribeToMetrics(testId) {
+    console.log('subscribeToMetrics called with testId:', testId);
+    
     if (!stompClient || !stompClient.connected) {
-        console.warn('WebSocket not connected');
+        console.warn('WebSocket not connected, waiting...');
+        // Retry after a short delay
+        setTimeout(function() {
+            subscribeToMetrics(testId);
+        }, 500);
         return;
     }
     
@@ -54,10 +60,24 @@ function subscribeToMetrics(testId) {
     
     // Subscribe to metrics updates
     metricsSubscription = stompClient.subscribe('/topic/metrics/' + testId, function(message) {
-        const metrics = JSON.parse(message.body);
-        console.log('Received metrics update:', metrics);
-        updateMetricsDisplay(metrics);
-        updateCharts(metrics);
+        try {
+            const metrics = JSON.parse(message.body);
+            console.log('Received metrics update:', metrics);
+            
+            if (typeof updateMetricsDisplay === 'function') {
+                updateMetricsDisplay(metrics);
+            } else {
+                console.error('updateMetricsDisplay is not defined!');
+            }
+            
+            if (typeof updateCharts === 'function') {
+                updateCharts(metrics);
+            } else {
+                console.error('updateCharts is not defined!');
+            }
+        } catch (error) {
+            console.error('Error processing metrics:', error);
+        }
     });
     
     // Subscribe to status updates
@@ -70,7 +90,7 @@ function subscribeToMetrics(testId) {
 }
 
 // Unsubscribe from current test
-function unsubscribeFromMetrics() {
+window.unsubscribeFromMetrics = function unsubscribeFromMetrics() {
     if (metricsSubscription) {
         metricsSubscription.unsubscribe();
         metricsSubscription = null;
