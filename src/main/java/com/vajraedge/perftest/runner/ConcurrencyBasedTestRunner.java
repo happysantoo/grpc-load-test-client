@@ -194,6 +194,18 @@ public class ConcurrencyBasedTestRunner {
     }
     
     /**
+     * Get the number of active virtual users.
+     * This represents the current concurrency level.
+     * 
+     * @return number of active virtual users
+     */
+    public int getActiveVirtualUsers() {
+        synchronized (activeUsers) {
+            return activeUsers.size();
+        }
+    }
+    
+    /**
      * Represents a single virtual user that executes tasks in a loop.
      */
     private class VirtualUser {

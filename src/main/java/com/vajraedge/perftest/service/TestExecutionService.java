@@ -363,7 +363,8 @@ public class TestExecutionService {
             if (runner instanceof PerformanceTestRunner) {
                 return ((PerformanceTestRunner) runner).getExecutor().getActiveTasks();
             } else if (runner instanceof ConcurrencyBasedTestRunner) {
-                return ((ConcurrencyBasedTestRunner) runner).getExecutor().getActiveTasks();
+                // For concurrency-based tests, active tasks = active virtual users
+                return ((ConcurrencyBasedTestRunner) runner).getActiveVirtualUsers();
             }
             return 0;
         }
