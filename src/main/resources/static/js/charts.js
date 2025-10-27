@@ -12,10 +12,28 @@ let latencyData = {
 };
 
 // Initialize charts
-function initializeCharts() {
-    // TPS Chart
-    const tpsCtx = document.getElementById('tpsChart').getContext('2d');
-    tpsChart = new Chart(tpsCtx, {
+window.initializeCharts = function initializeCharts() {
+    console.log('Initializing charts...');
+    
+    // Check if Chart.js is loaded
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js is not loaded!');
+        return;
+    }
+    
+    console.log('Chart.js version:', Chart.version);
+    
+    try {
+        // TPS Chart
+        const tpsCanvas = document.getElementById('tpsChart');
+        if (!tpsCanvas) {
+            console.error('tpsChart canvas not found!');
+            return;
+        }
+        console.log('Found tpsChart canvas:', tpsCanvas);
+        
+        const tpsCtx = tpsCanvas.getContext('2d');
+        tpsChart = new Chart(tpsCtx, {
         type: 'line',
         data: {
             labels: [],
@@ -53,9 +71,19 @@ function initializeCharts() {
             }
         }
     });
+    
+    console.log('TPS chart created successfully');
+    window.tpsChart = tpsChart;  // Export globally
 
     // Latency Chart
-    const latencyCtx = document.getElementById('latencyChart').getContext('2d');
+    const latencyCanvas = document.getElementById('latencyChart');
+    if (!latencyCanvas) {
+        console.error('latencyChart canvas not found!');
+        return;
+    }
+    console.log('Found latencyChart canvas:', latencyCanvas);
+    
+    const latencyCtx = latencyCanvas.getContext('2d');
     latencyChart = new Chart(latencyCtx, {
         type: 'line',
         data: {
@@ -109,6 +137,14 @@ function initializeCharts() {
             }
         }
     });
+    
+    console.log('Latency chart created successfully');
+    window.latencyChart = latencyChart;  // Export globally
+    console.log('Both charts initialized:', {tpsChart: !!tpsChart, latencyChart: !!latencyChart});
+    
+    } catch (error) {
+        console.error('Error initializing charts:', error);
+    }
 }
 
 // Update charts with new metrics
@@ -181,5 +217,16 @@ window.resetCharts = function resetCharts() {
 
 // Initialize charts on page load
 window.addEventListener('load', function() {
+    console.log('Page loaded, attempting to initialize charts...');
+    
+    // Try to initialize charts
     initializeCharts();
+    
+    // If charts didn't initialize, retry after a short delay
+    if (!tpsChart || !latencyChart) {
+        console.warn('Charts not initialized on first try, retrying in 500ms...');
+        setTimeout(function() {
+            initializeCharts();
+        }, 500);
+    }
 });

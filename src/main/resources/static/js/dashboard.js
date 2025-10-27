@@ -64,6 +64,17 @@ document.getElementById('testConfigForm').addEventListener('submit', async funct
         document.getElementById('noTestMessage').classList.add('d-none');
         document.getElementById('metricsPanel').classList.remove('d-none');
         
+        // Initialize or resize charts now that panel is visible
+        console.log('Metrics panel now visible, initializing charts...');
+        if (!window.tpsChart || !window.latencyChart) {
+            // Charts not initialized yet, do it now
+            initializeCharts();
+        } else {
+            // Charts exist but might need resizing
+            window.tpsChart.resize();
+            window.latencyChart.resize();
+        }
+        
         // Update UI
         document.getElementById('currentTestId').textContent = result.testId.substring(0, 8);
         document.getElementById('testStatus').textContent = 'RUNNING';
