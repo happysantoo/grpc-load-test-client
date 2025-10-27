@@ -27,7 +27,7 @@ public class ProductController {
     @GetMapping
     public List<Product> getProducts() throws InterruptedException {
         // Simulate database query delay
-        Thread.sleep(10);
+        //Thread.sleep(10);
 
         // Generate substantial JSON response
         List<Product> products = new ArrayList<>();
