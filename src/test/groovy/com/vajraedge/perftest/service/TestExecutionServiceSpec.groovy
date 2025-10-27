@@ -321,10 +321,13 @@ class TestExecutionServiceSpec extends Specification {
         TestConfigRequest config = new TestConfigRequest()
         config.setTaskType(taskType)
         config.setTaskParameter(taskParameter)
+        config.setStartingConcurrency(10)
         config.setMaxConcurrency(maxConcurrency)
-        config.setTargetTps(targetTps)
         config.setTestDurationSeconds(testDurationSeconds)
-        config.setRampUpDurationSeconds(rampUpDurationSeconds)
+        config.setRampStrategyType(com.vajraedge.perftest.concurrency.RampStrategyType.STEP)
+        config.setRampStep(10)
+        config.setRampIntervalSeconds(10L)
+        // Note: targetTps and rampUpDurationSeconds are no longer used in concurrency-based mode
         return config
     }
 }

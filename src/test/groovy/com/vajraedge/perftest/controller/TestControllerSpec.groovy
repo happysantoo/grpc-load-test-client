@@ -222,10 +222,12 @@ class TestControllerSpec extends Specification {
     def "should validate maxConcurrency: #concurrency is #validity"() {
         given:
         TestConfigRequest request = new TestConfigRequest()
-        request.setTargetTps(100)
         request.setMaxConcurrency(concurrency)
+        request.setStartingConcurrency(10)
         request.setTestDurationSeconds(60)
-        request.setRampUpDurationSeconds(0)
+        request.setRampStrategyType(com.vajraedge.perftest.concurrency.RampStrategyType.STEP)
+        request.setRampStep(10)
+        request.setRampIntervalSeconds(30L)
         
         String requestJson = objectMapper.writeValueAsString(request)
 
