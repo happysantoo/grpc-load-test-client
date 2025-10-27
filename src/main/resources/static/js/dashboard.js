@@ -129,10 +129,22 @@ window.updateMetricsDisplay = function updateMetricsDisplay(metrics) {
     
     try {
         // Update counters
-        document.getElementById('totalRequests').textContent = formatNumber(metrics.totalRequests || 0);
-        document.getElementById('currentTps').textContent = formatNumber(metrics.currentTps || 0);
-        document.getElementById('activeTasks').textContent = formatNumber(metrics.activeTasks || 0);
-        document.getElementById('avgLatency').textContent = formatLatency(metrics.avgLatencyMs || 0);
+        const totalRequestsEl = document.getElementById('totalRequests');
+        const currentTpsEl = document.getElementById('currentTps');
+        const activeTasksEl = document.getElementById('activeTasks');
+        const avgLatencyEl = document.getElementById('avgLatency');
+        
+        console.log('DOM elements found:', {
+            totalRequests: !!totalRequestsEl,
+            currentTps: !!currentTpsEl,
+            activeTasks: !!activeTasksEl,
+            avgLatency: !!avgLatencyEl
+        });
+        
+        if (totalRequestsEl) totalRequestsEl.textContent = formatNumber(metrics.totalRequests || 0);
+        if (currentTpsEl) currentTpsEl.textContent = formatNumber(metrics.currentTps || 0);
+        if (activeTasksEl) activeTasksEl.textContent = formatNumber(metrics.activeTasks || 0);
+        if (avgLatencyEl) avgLatencyEl.textContent = formatLatency(metrics.avgLatencyMs || 0);
     
     // Update success rate
     if (metrics.successRate !== undefined && metrics.successRate !== null) {
@@ -198,6 +210,7 @@ function stopStatusPolling() {
 
 // Load and display active tests
 async function loadActiveTests() {
+    console.log('loadActiveTests() called');
     try {
         const response = await fetch('/api/tests');
         if (!response.ok) {
@@ -205,14 +218,18 @@ async function loadActiveTests() {
         }
         
         const data = await response.json();
+        console.log('Active tests response:', data);
         const listContainer = document.getElementById('activeTestsList');
         
         if (data.count === 0) {
+            console.log('No active tests');
             listContainer.innerHTML = '<p class="text-muted">No active tests</p>';
         } else {
+            console.log('Found', data.count, 'active test(s)');
             listContainer.innerHTML = '';
             // Backend returns Map<String, String> where value is just the status
             Object.entries(data.activeTests).forEach(([testId, status]) => {
+                console.log('Adding test to list:', testId, status);
                 const item = document.createElement('div');
                 item.className = 'list-group-item list-group-item-action';
                 item.innerHTML = `
