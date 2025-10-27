@@ -26,6 +26,7 @@ public class MetricsCollector implements AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(MetricsCollector.class);
     private static final int DEFAULT_MAX_LATENCY_HISTORY = 10000;
     private static final long TPS_WINDOW_MS = 5000; // 5-second window for current TPS
+    private static final int MAX_TIMESTAMP_HISTORY = 100000; // Cap timestamp queue to prevent unbounded growth
     
     private final Instant startTime;
     private final AtomicLong totalTasks = new AtomicLong(0);
@@ -56,6 +57,12 @@ public class MetricsCollector implements AutoCloseable {
         
         // Record timestamp for windowed TPS calculation
         taskTimestamps.offer(currentTime);
+        
+        // Safety check: limit queue size to prevent unbounded memory growth
+        // This ensures memory usage stays bounded even in very high throughput scenarios
+        if (taskTimestamps.size() > MAX_TIMESTAMP_HISTORY) {
+            taskTimestamps.poll();
+        }
         
         if (result.isSuccess()) {
             successfulTasks.incrementAndGet();
