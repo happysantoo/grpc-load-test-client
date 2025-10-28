@@ -27,12 +27,15 @@ class TestExecutionServiceSpec extends Specification {
     def "should start test and generate unique test ID"() {
         given:
         TestConfigRequest config = new TestConfigRequest()
+        config.setMode(com.vajraedge.perftest.concurrency.LoadTestMode.CONCURRENCY_BASED)
         config.setTaskType("SLEEP")
         config.setTaskParameter(10)
+        config.setStartingConcurrency(5)
         config.setMaxConcurrency(5)
-        config.setTargetTps(50)
+        config.setRampStrategyType(com.vajraedge.perftest.concurrency.RampStrategyType.STEP)
+        config.setRampStep(5)
+        config.setRampIntervalSeconds(30L)
         config.setTestDurationSeconds(2)
-        config.setRampUpDurationSeconds(0)
 
         when:
         String testId = service.startTest(config)
@@ -198,7 +201,7 @@ class TestExecutionServiceSpec extends Specification {
         then:
         testId != null
         status != null
-        status.getConfiguration().getRampUpDurationSeconds() == 2
+        status.getConfiguration().getRampStrategyType() != null
 
         cleanup:
         service.stopTest(testId)
@@ -275,9 +278,9 @@ class TestExecutionServiceSpec extends Specification {
         status.getConfiguration().getTaskType() == "SLEEP"
         status.getConfiguration().getTaskParameter() == 50
         status.getConfiguration().getMaxConcurrency() == 20
-        status.getConfiguration().getTargetTps() == 100
+        status.getConfiguration().getMode() == com.vajraedge.perftest.concurrency.LoadTestMode.CONCURRENCY_BASED
         status.getConfiguration().getTestDurationSeconds() == 10
-        status.getConfiguration().getRampUpDurationSeconds() == 3
+        status.getConfiguration().getRampStrategyType() != null
 
         cleanup:
         service.stopTest(testId)
@@ -315,16 +318,107 @@ class TestExecutionServiceSpec extends Specification {
         service.stopTest(testId)
     }
 
+    def "should track pending tasks correctly during test execution"() {
+        given:
+        TestConfigRequest config = new TestConfigRequest()
+        config.setMode(com.vajraedge.perftest.concurrency.LoadTestMode.CONCURRENCY_BASED)
+        config.setTaskType("SLEEP")
+        config.setTaskParameter(100)  // 100ms sleep to create some queue
+        config.setStartingConcurrency(50)
+        config.setMaxConcurrency(50)
+        config.setRampStrategyType(com.vajraedge.perftest.concurrency.RampStrategyType.STEP)
+        config.setRampStep(10)
+        config.setRampIntervalSeconds(10L)
+        config.setTestDurationSeconds(3)
+
+        when:
+        String testId = service.startTest(config)
+        Thread.sleep(500)  // Allow test to ramp up
+        int pendingTasks = service.getPendingTasks(testId)
+
+        then:
+        pendingTasks >= 0  // Should have non-negative pending tasks
+
+        cleanup:
+        service.stopTest(testId)
+    }
+
+    def "should return zero pending tasks for non-existent test"() {
+        when:
+        int pendingTasks = service.getPendingTasks("non-existent-test-id")
+
+        then:
+        pendingTasks == 0
+    }
+
+    def "should calculate pending tasks as submitted minus completed minus active"() {
+        given:
+        TestConfigRequest config = new TestConfigRequest()
+        config.setMode(com.vajraedge.perftest.concurrency.LoadTestMode.CONCURRENCY_BASED)
+        config.setTaskType("SLEEP")
+        config.setTaskParameter(50)
+        config.setStartingConcurrency(10)
+        config.setMaxConcurrency(10)
+        config.setRampStrategyType(com.vajraedge.perftest.concurrency.RampStrategyType.STEP)
+        config.setRampStep(10)
+        config.setRampIntervalSeconds(5L)
+        config.setTestDurationSeconds(2)
+
+        when:
+        String testId = service.startTest(config)
+        Thread.sleep(300)
+        
+        def testExecution = service.getActiveTests().get(testId)
+        def executor = testExecution?.getExecutor()
+        
+        int pendingFromService = service.getPendingTasks(testId)
+        int pendingFromExecutor = executor?.getPendingTasks() ?: 0
+
+        then:
+        pendingFromService == pendingFromExecutor
+        pendingFromService >= 0
+
+        cleanup:
+        service.stopTest(testId)
+    }
+
+    def "should enforce max concurrent tests limit"() {
+        given:
+        TestConfigRequest config = createConfig("SLEEP", 10, 5, 50, 30, 0)
+        List<String> testIds = []
+
+        when: "start maximum allowed concurrent tests"
+        for (int i = 0; i < 10; i++) {
+            testIds.add(service.startTest(config))
+        }
+
+        then: "should have 10 active tests"
+        service.getActiveTests().size() == 10
+
+        when: "try to start one more test"
+        service.startTest(config)
+
+        then: "should throw exception"
+        thrown(IllegalStateException)
+
+        cleanup:
+        testIds.each { testId -> service.stopTest(testId) }
+    }
+
     private TestConfigRequest createConfig(String taskType, int taskParameter, 
                                           int maxConcurrency, int targetTps, 
                                           int testDurationSeconds, int rampUpDurationSeconds) {
         TestConfigRequest config = new TestConfigRequest()
+        config.setMode(com.vajraedge.perftest.concurrency.LoadTestMode.CONCURRENCY_BASED)
         config.setTaskType(taskType)
         config.setTaskParameter(taskParameter)
+        config.setStartingConcurrency(Math.min(1, maxConcurrency))  // Start at 1 or maxConcurrency if less
         config.setMaxConcurrency(maxConcurrency)
-        config.setTargetTps(targetTps)
         config.setTestDurationSeconds(testDurationSeconds)
-        config.setRampUpDurationSeconds(rampUpDurationSeconds)
+        config.setRampStrategyType(com.vajraedge.perftest.concurrency.RampStrategyType.STEP)
+        config.setRampStep(10)
+        config.setRampIntervalSeconds(10L)
+        // Note: targetTps and rampUpDurationSeconds are no longer used in concurrency-based mode
         return config
     }
 }

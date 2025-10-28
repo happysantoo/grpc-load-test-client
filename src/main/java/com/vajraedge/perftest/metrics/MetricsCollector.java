@@ -25,6 +25,8 @@ public class MetricsCollector implements AutoCloseable {
     
     private static final Logger logger = LoggerFactory.getLogger(MetricsCollector.class);
     private static final int DEFAULT_MAX_LATENCY_HISTORY = 10000;
+    private static final long TPS_WINDOW_MS = 5000; // 5-second window for current TPS
+    private static final int MAX_TIMESTAMP_HISTORY = 100000; // Cap timestamp queue to prevent unbounded growth
     
     private final Instant startTime;
     private final AtomicLong totalTasks = new AtomicLong(0);
@@ -34,6 +36,9 @@ public class MetricsCollector implements AutoCloseable {
     private final ConcurrentLinkedQueue<Double> latencyHistory = new ConcurrentLinkedQueue<>();
     private final int maxLatencyHistory;
     private final ConcurrentHashMap<String, AtomicLong> errorCounts = new ConcurrentHashMap<>();
+    
+    // For windowed TPS calculation
+    private final ConcurrentLinkedQueue<Long> taskTimestamps = new ConcurrentLinkedQueue<>();
     
     public MetricsCollector() {
         this(DEFAULT_MAX_LATENCY_HISTORY);
@@ -46,8 +51,18 @@ public class MetricsCollector implements AutoCloseable {
     }
     
     public void recordResult(TaskResult result) {
+        long currentTime = System.currentTimeMillis();
         totalTasks.incrementAndGet();
         totalLatencyNanos.add(result.getLatencyNanos());
+        
+        // Record timestamp for windowed TPS calculation
+        taskTimestamps.offer(currentTime);
+        
+        // Safety check: limit queue size to prevent unbounded memory growth
+        // This ensures memory usage stays bounded even in very high throughput scenarios
+        if (taskTimestamps.size() > MAX_TIMESTAMP_HISTORY) {
+            taskTimestamps.poll();
+        }
         
         if (result.isSuccess()) {
             successfulTasks.incrementAndGet();
@@ -80,7 +95,9 @@ public class MetricsCollector implements AutoCloseable {
         long failed = failedTasks.get();
         
         Duration elapsed = Duration.between(startTime, Instant.now());
-        double tps = elapsed.toMillis() > 0 ? (total * 1000.0) / elapsed.toMillis() : 0.0;
+        
+        // Calculate current TPS based on recent activity window
+        double currentTps = calculateCurrentTps();
         
         double avgLatencyMs = total > 0 ? (totalLatencyNanos.doubleValue() / 1_000_000.0) / total : 0.0;
         double successRate = total > 0 ? (successful * 100.0) / total : 0.0;
@@ -96,12 +113,38 @@ public class MetricsCollector implements AutoCloseable {
                 total,
                 successful,
                 failed,
-                tps,
+                currentTps,
                 avgLatencyMs,
                 successRate,
                 percentiles,
                 errorSnapshot
         );
+    }
+    
+    /**
+     * Calculate current TPS based on tasks completed in the last TPS_WINDOW_MS milliseconds.
+     * This gives a more accurate representation of current throughput during ramp-up.
+     */
+    private double calculateCurrentTps() {
+        long now = System.currentTimeMillis();
+        long windowStart = now - TPS_WINDOW_MS;
+        
+        // Remove timestamps outside the window
+        while (!taskTimestamps.isEmpty() && taskTimestamps.peek() < windowStart) {
+            taskTimestamps.poll();
+        }
+        
+        int tasksInWindow = taskTimestamps.size();
+        
+        // Calculate TPS based on tasks in the window
+        if (tasksInWindow > 0) {
+            return (tasksInWindow * 1000.0) / TPS_WINDOW_MS;
+        }
+        
+        // Fallback to average TPS if no tasks in window
+        Duration elapsed = Duration.between(startTime, Instant.now());
+        long total = totalTasks.get();
+        return elapsed.toMillis() > 0 ? (total * 1000.0) / elapsed.toMillis() : 0.0;
     }
     
     private PercentileStats calculatePercentiles(double[] percentiles) {
@@ -131,6 +174,7 @@ public class MetricsCollector implements AutoCloseable {
         failedTasks.set(0);
         totalLatencyNanos.reset();
         latencyHistory.clear();
+        taskTimestamps.clear();
         errorCounts.clear();
         logger.info("MetricsCollector reset");
     }
@@ -138,6 +182,7 @@ public class MetricsCollector implements AutoCloseable {
     @Override
     public void close() {
         latencyHistory.clear();
+        taskTimestamps.clear();
         errorCounts.clear();
         logger.info("MetricsCollector closed");
     }

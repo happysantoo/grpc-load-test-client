@@ -123,6 +123,10 @@ public class TestStatusResponse {
             this.activeTasks = activeTasks;
         }
         
+        public void setActiveTasks(Long activeTasks) {
+            this.activeTasks = activeTasks != null ? activeTasks.intValue() : null;
+        }
+        
         public Double getCurrentTps() {
             return currentTps;
         }

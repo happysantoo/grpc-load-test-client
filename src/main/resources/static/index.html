@@ -29,26 +29,74 @@
                     </div>
                     <div class="card-body">
                         <form id="testConfigForm">
+                            <!-- Mode Selection -->
                             <div class="mb-3">
-                                <label for="targetTps" class="form-label">Target TPS</label>
-                                <input type="number" class="form-control" id="targetTps" value="100" min="1" max="100000" required>
-                                <div class="form-text">Requests per second (1-100,000)</div>
+                                <label for="testMode" class="form-label">Test Mode</label>
+                                <select class="form-select" id="testMode" required>
+                                    <option value="CONCURRENCY_BASED" selected>Concurrency-Based (Virtual Users)</option>
+                                    <option value="RATE_LIMITED">Hybrid (Concurrency + TPS Limit)</option>
+                                </select>
+                                <div class="form-text">Concurrency-based measures TPS as output, Hybrid mode adds TPS cap</div>
+                            </div>
+
+                            <!-- Concurrency Fields -->
+                            <div class="mb-3">
+                                <label for="startingConcurrency" class="form-label">Starting Concurrency</label>
+                                <input type="number" class="form-control" id="startingConcurrency" value="10" min="1" max="10000" required>
+                                <div class="form-text">Initial number of virtual users</div>
                             </div>
                             
                             <div class="mb-3">
-                                <label for="maxConcurrency" class="form-label">Max Concurrency</label>
-                                <input type="number" class="form-control" id="maxConcurrency" value="50" min="1" max="50000" required>
-                                <div class="form-text">Maximum parallel tasks (1-50,000)</div>
+                                <label for="maxConcurrency" class="form-label">Maximum Concurrency</label>
+                                <input type="number" class="form-control" id="maxConcurrency" value="100" min="1" max="10000" required>
+                                <div class="form-text">Maximum number of virtual users</div>
+                            </div>
+
+                            <!-- Ramp Strategy -->
+                            <div class="mb-3">
+                                <label for="rampStrategy" class="form-label">Ramp Strategy</label>
+                                <select class="form-select" id="rampStrategy" required>
+                                    <option value="STEP" selected>Step (Interval-based increments)</option>
+                                    <option value="LINEAR">Linear (Steady increase)</option>
+                                </select>
+                            </div>
+
+                            <!-- Step Strategy Fields -->
+                            <div id="stepStrategyFields">
+                                <div class="mb-3">
+                                    <label for="rampStep" class="form-label">Ramp Step</label>
+                                    <input type="number" class="form-control" id="rampStep" value="10" min="1" max="1000" required>
+                                    <div class="form-text">Users to add per interval</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="rampInterval" class="form-label">Ramp Interval (seconds)</label>
+                                    <input type="number" class="form-control" id="rampInterval" value="30" min="1" required>
+                                    <div class="form-text">Seconds between ramp steps</div>
+                                </div>
+                            </div>
+
+                            <!-- Linear Strategy Fields -->
+                            <div id="linearStrategyFields" class="d-none">
+                                <div class="mb-3">
+                                    <label for="rampDuration" class="form-label">Ramp Duration (seconds)</label>
+                                    <input type="number" class="form-control" id="rampDuration" value="60" min="1" required>
+                                    <div class="form-text">Time to reach max concurrency</div>
+                                </div>
+                            </div>
+
+                            <!-- TPS Limit (for Hybrid mode) -->
+                            <div id="tpsLimitField" class="d-none">
+                                <div class="mb-3">
+                                    <label for="maxTpsLimit" class="form-label">Maximum TPS Limit</label>
+                                    <input type="number" class="form-control" id="maxTpsLimit" value="1000" min="1">
+                                    <div class="form-text">Optional TPS cap for hybrid mode</div>
+                                </div>
                             </div>
                             
                             <div class="mb-3">
                                 <label for="testDuration" class="form-label">Test Duration (seconds)</label>
-                                <input type="number" class="form-control" id="testDuration" value="60" min="1" required>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="rampUpDuration" class="form-label">Ramp-Up Duration (seconds)</label>
-                                <input type="number" class="form-control" id="rampUpDuration" value="5" min="0" required>
+                                <input type="number" class="form-control" id="testDuration" value="120" min="1" required>
                             </div>
                             
                             <div class="mb-3">
@@ -140,24 +188,97 @@
                         </div>
                         <div class="card-body">
                             <div class="row">
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <div class="metric-card">
                                         <div class="metric-label">Current TPS</div>
                                         <div class="metric-value text-primary" id="currentTps">0</div>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <div class="metric-card">
                                         <div class="metric-label">Active Tasks</div>
                                         <div class="metric-value text-info" id="activeTasks">0</div>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <div class="metric-card">
-                                        <div class="metric-label">Avg Latency</div>
-                                        <div class="metric-value text-warning" id="avgLatency">0ms</div>
+                                        <div class="metric-label">Pending Tasks</div>
+                                        <div class="metric-value text-warning" id="pendingTasks">0</div>
                                     </div>
                                 </div>
+                                <div class="col-md-3">
+                                    <div class="metric-card">
+                                        <div class="metric-label">Avg Latency</div>
+                                        <div class="metric-value text-success" id="avgLatency">0ms</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Diagnostics Panel -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">📊 Performance Diagnostics</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <h6 class="text-muted">Concurrency Metrics</h6>
+                                    <table class="table table-sm table-borderless">
+                                        <tbody>
+                                            <tr>
+                                                <td><strong>Virtual Users:</strong></td>
+                                                <td class="text-end"><span id="diagVirtualUsers">-</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Tasks/User/Sec:</strong></td>
+                                                <td class="text-end"><span id="diagTasksPerUser">-</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Submitted Tasks:</strong></td>
+                                                <td class="text-end"><span id="diagSubmitted">-</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Completed Tasks:</strong></td>
+                                                <td class="text-end"><span id="diagCompleted">-</span></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-muted">Bottleneck Analysis</h6>
+                                    <table class="table table-sm table-borderless">
+                                        <tbody>
+                                            <tr>
+                                                <td><strong>Queue Depth:</strong></td>
+                                                <td class="text-end"><span id="diagQueueDepth" class="badge bg-secondary">-</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Latency Ratio (P99/P50):</strong></td>
+                                                <td class="text-end"><span id="diagLatencyRatio">-</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>TPS Efficiency:</strong></td>
+                                                <td class="text-end"><span id="diagEfficiency">-</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Bottleneck Indicator:</strong></td>
+                                                <td class="text-end"><span id="diagBottleneck" class="badge bg-success">Analyzing...</span></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="alert alert-info mb-0">
+                                <small>
+                                    <strong>💡 Reading the Diagnostics:</strong><br>
+                                    <strong>Tasks/User/Sec:</strong> Higher is better (service responding quickly)<br>
+                                    <strong>Queue Depth:</strong> Should be 0 (pending tasks building up indicates bottleneck)<br>
+                                    <strong>Latency Ratio:</strong> Close to 1.0 is ideal (consistent response times)<br>
+                                    <strong>TPS Efficiency:</strong> ~100% means VajraEdge is keeping up<br>
+                                    <strong>Bottleneck:</strong> Shows whether HTTP service or VajraEdge is limiting throughput
+                                </small>
                             </div>
                         </div>
                     </div>

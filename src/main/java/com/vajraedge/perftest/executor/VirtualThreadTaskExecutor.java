@@ -100,6 +100,19 @@ public class VirtualThreadTaskExecutor implements TaskExecutor {
         return completedTasks.get();
     }
     
+    /**
+     * Get the number of pending tasks (submitted but not yet started execution).
+     * These are tasks waiting for a semaphore permit or queued in the executor.
+     * 
+     * @return number of pending tasks
+     */
+    public int getPendingTasks() {
+        long submitted = submittedTasks.get();
+        long completed = completedTasks.get();
+        int active = activeTasks.get();
+        return (int) Math.max(0, submitted - completed - active);
+    }
+    
     @Override
     public void close() {
         logger.info("Shutting down VirtualThreadTaskExecutor...");

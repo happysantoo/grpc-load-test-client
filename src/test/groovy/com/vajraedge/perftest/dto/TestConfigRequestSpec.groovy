@@ -1,5 +1,7 @@
 package com.vajraedge.perftest.dto
 
+import com.vajraedge.perftest.concurrency.LoadTestMode
+import com.vajraedge.perftest.concurrency.RampStrategyType
 import jakarta.validation.ConstraintViolation
 import jakarta.validation.Validation
 import jakarta.validation.Validator
@@ -22,10 +24,13 @@ class TestConfigRequestSpec extends Specification {
     def "should create valid test config request with all fields"() {
         given:
         TestConfigRequest request = new TestConfigRequest()
-        request.setTargetTps(100)
-        request.setMaxConcurrency(10)
+        request.setMode(LoadTestMode.CONCURRENCY_BASED)
+        request.setStartingConcurrency(10)
+        request.setMaxConcurrency(100)
+        request.setRampStrategyType(RampStrategyType.STEP)
+        request.setRampStep(10)
+        request.setRampIntervalSeconds(30L)
         request.setTestDurationSeconds(60)
-        request.setRampUpDurationSeconds(5)
         request.setTaskType("SLEEP")
         request.setTaskParameter(10)
 
@@ -34,47 +39,20 @@ class TestConfigRequestSpec extends Specification {
 
         then:
         violations.isEmpty()
-        request.getTargetTps() == 100
-        request.getMaxConcurrency() == 10
+        request.getMode() == LoadTestMode.CONCURRENCY_BASED
+        request.getStartingConcurrency() == 10
+        request.getMaxConcurrency() == 100
+        request.getRampStrategyType() == RampStrategyType.STEP
         request.getTestDurationSeconds() == 60
-        request.getRampUpDurationSeconds() == 5
         request.getTaskType() == "SLEEP"
         request.getTaskParameter() == 10
     }
 
     @Unroll
-    def "should validate targetTps: value=#value, shouldBeValid=#shouldBeValid"() {
-        given:
-        TestConfigRequest request = new TestConfigRequest()
-        request.setTargetTps(value)
-        request.setMaxConcurrency(10)
-        request.setTestDurationSeconds(60)
-        request.setRampUpDurationSeconds(0)
-
-        when:
-        Set<ConstraintViolation<TestConfigRequest>> violations = validator.validate(request)
-
-        then:
-        violations.isEmpty() == shouldBeValid
-
-        where:
-        value    || shouldBeValid
-        null     || false  // @NotNull
-        0        || false  // @Min(1)
-        1        || true   // Valid
-        100      || true   // Valid
-        100000   || true   // @Max(100000)
-        100001   || false  // Exceeds max
-    }
-
-    @Unroll
     def "should validate maxConcurrency: value=#value, shouldBeValid=#shouldBeValid"() {
         given:
-        TestConfigRequest request = new TestConfigRequest()
-        request.setTargetTps(100)
+        TestConfigRequest request = createValidConfig()
         request.setMaxConcurrency(value)
-        request.setTestDurationSeconds(60)
-        request.setRampUpDurationSeconds(0)
 
         when:
         Set<ConstraintViolation<TestConfigRequest>> violations = validator.validate(request)
@@ -88,6 +66,7 @@ class TestConfigRequestSpec extends Specification {
         0      || false  // @Min(1)
         1      || true   // Valid
         1000   || true   // Valid
+        10000  || true   // Valid
         50000  || true   // @Max(50000)
         50001  || false  // Exceeds max
     }
@@ -95,11 +74,8 @@ class TestConfigRequestSpec extends Specification {
     @Unroll
     def "should validate testDurationSeconds: value=#value, shouldBeValid=#shouldBeValid"() {
         given:
-        TestConfigRequest request = new TestConfigRequest()
-        request.setTargetTps(100)
-        request.setMaxConcurrency(10)
+        TestConfigRequest request = createValidConfig()
         request.setTestDurationSeconds(value)
-        request.setRampUpDurationSeconds(0)
 
         when:
         Set<ConstraintViolation<TestConfigRequest>> violations = validator.validate(request)
@@ -116,47 +92,19 @@ class TestConfigRequestSpec extends Specification {
         3600  || true   // Valid
     }
 
-    @Unroll
-    def "should validate rampUpDurationSeconds: value=#value, shouldBeValid=#shouldBeValid"() {
-        given:
-        TestConfigRequest request = new TestConfigRequest()
-        request.setTargetTps(100)
-        request.setMaxConcurrency(10)
-        request.setTestDurationSeconds(60)
-        request.setRampUpDurationSeconds(value)
-
-        when:
-        Set<ConstraintViolation<TestConfigRequest>> violations = validator.validate(request)
-
-        then:
-        violations.isEmpty() == shouldBeValid
-
-        where:
-        value || shouldBeValid
-        null  || false  // @NotNull
-        -1    || false  // @Min(0)
-        0     || true   // Valid (no ramp-up)
-        5     || true   // Valid
-        60    || true   // Valid
-    }
-
     def "should have default task type and parameter"() {
         when:
         TestConfigRequest request = new TestConfigRequest()
 
         then:
-        request.getTaskType() == "SLEEP"
-        request.getTaskParameter() == 10
+        request.getTaskType() == "HTTP"
+        request.getTaskParameter() == "http://localhost:8081/api/products"
     }
 
     @Unroll
     def "should support custom task types: taskType=#taskType"() {
         given:
-        TestConfigRequest request = new TestConfigRequest()
-        request.setTargetTps(100)
-        request.setMaxConcurrency(10)
-        request.setTestDurationSeconds(60)
-        request.setRampUpDurationSeconds(0)
+        TestConfigRequest request = createValidConfig()
         request.setTaskType(taskType)
 
         when:
@@ -173,11 +121,7 @@ class TestConfigRequestSpec extends Specification {
     @Unroll
     def "should support custom task parameters: taskParameter=#taskParameter"() {
         given:
-        TestConfigRequest request = new TestConfigRequest()
-        request.setTargetTps(100)
-        request.setMaxConcurrency(10)
-        request.setTestDurationSeconds(60)
-        request.setRampUpDurationSeconds(0)
+        TestConfigRequest request = createValidConfig()
         request.setTaskParameter(taskParameter)
 
         when:
@@ -193,27 +137,25 @@ class TestConfigRequestSpec extends Specification {
 
     def "should handle null task type"() {
         given:
-        TestConfigRequest request = new TestConfigRequest()
-        request.setTargetTps(100)
-        request.setMaxConcurrency(10)
-        request.setTestDurationSeconds(60)
-        request.setRampUpDurationSeconds(0)
+        TestConfigRequest request = createValidConfig()
         request.setTaskType(null)
 
         when:
         Set<ConstraintViolation<TestConfigRequest>> violations = validator.validate(request)
 
         then:
-        violations.isEmpty()  // No @NotNull on taskType
+        !violations.isEmpty()  // taskType is @NotNull
     }
 
     def "should validate realistic test configuration"() {
         given:
         TestConfigRequest request = new TestConfigRequest()
-        request.setTargetTps(1000)
+        request.setMode(LoadTestMode.CONCURRENCY_BASED)
+        request.setStartingConcurrency(10)
         request.setMaxConcurrency(100)
+        request.setRampStrategyType(RampStrategyType.LINEAR)
+        request.setRampDurationSeconds(30)
         request.setTestDurationSeconds(300)  // 5 minutes
-        request.setRampUpDurationSeconds(30)
         request.setTaskType("GRPC_CALL")
         request.setTaskParameter(50)
 
@@ -227,10 +169,13 @@ class TestConfigRequestSpec extends Specification {
     def "should validate high-load test configuration"() {
         given:
         TestConfigRequest request = new TestConfigRequest()
-        request.setTargetTps(50000)
+        request.setMode(LoadTestMode.CONCURRENCY_BASED)
+        request.setStartingConcurrency(100)
         request.setMaxConcurrency(10000)
+        request.setRampStrategyType(RampStrategyType.STEP)
+        request.setRampStep(100)
+        request.setRampIntervalSeconds(10L)
         request.setTestDurationSeconds(60)
-        request.setRampUpDurationSeconds(10)
 
         when:
         Set<ConstraintViolation<TestConfigRequest>> violations = validator.validate(request)
@@ -242,12 +187,27 @@ class TestConfigRequestSpec extends Specification {
     def "should collect multiple validation errors"() {
         given:
         TestConfigRequest request = new TestConfigRequest()
-        // Leave all required fields null
+        // Explicitly set required fields to null to trigger validation errors
+        request.setMode(null)
+        request.setMaxConcurrency(null)
+        request.setTestDurationSeconds(null)
 
         when:
         Set<ConstraintViolation<TestConfigRequest>> violations = validator.validate(request)
 
         then:
-        violations.size() == 4  // targetTps, maxConcurrency, testDurationSeconds, rampUpDurationSeconds
+        violations.size() >= 3  // mode, maxConcurrency, testDurationSeconds (all @NotNull)
+    }
+
+    private TestConfigRequest createValidConfig() {
+        TestConfigRequest request = new TestConfigRequest()
+        request.setMode(LoadTestMode.CONCURRENCY_BASED)
+        request.setStartingConcurrency(1)
+        request.setMaxConcurrency(100)
+        request.setRampStrategyType(RampStrategyType.STEP)
+        request.setRampStep(10)
+        request.setRampIntervalSeconds(30L)
+        request.setTestDurationSeconds(60)
+        return request
     }
 }

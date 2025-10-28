@@ -1,5 +1,7 @@
 package com.vajraedge.perftest.dto
 
+import com.vajraedge.perftest.concurrency.LoadTestMode
+import com.vajraedge.perftest.concurrency.RampStrategyType
 import spock.lang.Specification
 import spock.lang.Unroll
 
@@ -82,17 +84,20 @@ class TestStatusResponseSpec extends Specification {
         given:
         TestStatusResponse response = new TestStatusResponse()
         TestConfigRequest config = new TestConfigRequest()
-        config.setTargetTps(100)
-        config.setMaxConcurrency(10)
+        config.setMode(LoadTestMode.CONCURRENCY_BASED)
+        config.setStartingConcurrency(10)
+        config.setMaxConcurrency(100)
+        config.setRampStrategyType(RampStrategyType.STEP)
+        config.setRampStep(10)
+        config.setRampIntervalSeconds(30L)
         config.setTestDurationSeconds(60)
-        config.setRampUpDurationSeconds(5)
 
         when:
         response.setConfiguration(config)
 
         then:
         response.getConfiguration() == config
-        response.getConfiguration().getTargetTps() == 100
+        response.getConfiguration().getMaxConcurrency() == 100
     }
 
     def "should create and store current metrics"() {
@@ -127,10 +132,12 @@ class TestStatusResponseSpec extends Specification {
         response.setElapsedSeconds(300L)
 
         TestConfigRequest config = new TestConfigRequest()
-        config.setTargetTps(1000)
-        config.setMaxConcurrency(100)
+        config.setMode(LoadTestMode.CONCURRENCY_BASED)
+        config.setStartingConcurrency(10)
+        config.setMaxConcurrency(1000)
+        config.setRampStrategyType(RampStrategyType.LINEAR)
+        config.setRampDurationSeconds(30)
         config.setTestDurationSeconds(300)
-        config.setRampUpDurationSeconds(30)
         response.setConfiguration(config)
 
         TestStatusResponse.CurrentMetrics metrics = new TestStatusResponse.CurrentMetrics()
@@ -146,7 +153,7 @@ class TestStatusResponseSpec extends Specification {
         response.getTestId() == "test-456"
         response.getStatus() == "COMPLETED"
         response.getElapsedSeconds() == 300L
-        response.getConfiguration().getTargetTps() == 1000
+        response.getConfiguration().getMaxConcurrency() == 1000
         response.getCurrentMetrics().getTotalRequests() == 15000L
     }
 

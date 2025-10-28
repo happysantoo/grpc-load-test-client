@@ -43,11 +43,12 @@ public class MetricsWebSocketHandler {
             try {
                 MetricsResponse metrics = metricsService.convertToResponse(
                     testId,
-                    execution.getRunner().getMetricsCollector().getSnapshot()
+                    execution.getMetricsCollector().getSnapshot()
                 );
                 
                 // Also include execution status
-                metrics.setActiveTasks(execution.getRunner().getExecutor().getActiveTasks());
+                metrics.setActiveTasks((int) execution.getActiveTasks());
+                metrics.setPendingTasks(execution.getPendingTasks());
                 
                 // Broadcast to topic for this specific test
                 messagingTemplate.convertAndSend("/topic/metrics/" + testId, metrics);

@@ -240,4 +240,80 @@ class MetricsResponseSpec extends Specification {
         response.getLatencyPercentiles().get("p95") == 50.0
         response.getLatencyPercentiles().get("p99") == null
     }
+
+    def "should set and get pending tasks"() {
+        given:
+        MetricsResponse response = new MetricsResponse()
+
+        when:
+        response.setPendingTasks(150)
+
+        then:
+        response.getPendingTasks() == 150
+    }
+
+    @Unroll
+    def "should handle different pending task counts: #pendingTasks"() {
+        given:
+        MetricsResponse response = new MetricsResponse()
+
+        when:
+        response.setPendingTasks(pendingTasks)
+
+        then:
+        response.getPendingTasks() == pendingTasks
+
+        where:
+        pendingTasks << [0, 1, 10, 50, 100, 500, 1000]
+    }
+
+    def "should create complete metrics response with pending tasks"() {
+        given:
+        MetricsResponse response = new MetricsResponse()
+
+        when:
+        response.setTestId("test-pending")
+        response.setTimestamp(System.currentTimeMillis())
+        response.setTotalRequests(5000L)
+        response.setSuccessfulRequests(4900L)
+        response.setFailedRequests(100L)
+        response.setSuccessRate(98.0)
+        response.setActiveTasks(200)
+        response.setPendingTasks(300)
+        response.setCurrentTps(250.0)
+
+        then:
+        response.getTestId() == "test-pending"
+        response.getTotalRequests() == 5000L
+        response.getActiveTasks() == 200
+        response.getPendingTasks() == 300
+        response.getCurrentTps() == 250.0
+    }
+
+    def "should handle metrics with zero pending tasks"() {
+        given:
+        MetricsResponse response = new MetricsResponse()
+
+        when:
+        response.setActiveTasks(100)
+        response.setPendingTasks(0)
+
+        then:
+        response.getActiveTasks() == 100
+        response.getPendingTasks() == 0
+    }
+
+    def "should distinguish between active and pending tasks"() {
+        given:
+        MetricsResponse response = new MetricsResponse()
+
+        when:
+        response.setActiveTasks(50)
+        response.setPendingTasks(150)
+
+        then:
+        response.getActiveTasks() == 50
+        response.getPendingTasks() == 150
+        response.getActiveTasks() != response.getPendingTasks()
+    }
 }

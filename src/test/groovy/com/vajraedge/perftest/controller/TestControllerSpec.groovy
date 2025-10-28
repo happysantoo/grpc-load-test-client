@@ -3,6 +3,8 @@ package com.vajraedge.perftest.controller
 import com.vajraedge.perftest.dto.TestConfigRequest
 import com.vajraedge.perftest.dto.TestStatusResponse
 import com.vajraedge.perftest.service.TestExecutionService
+import com.vajraedge.perftest.concurrency.LoadTestMode
+import com.vajraedge.perftest.concurrency.RampStrategyType
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
@@ -35,10 +37,13 @@ class TestControllerSpec extends Specification {
     def "should start test with valid configuration"() {
         given:
         TestConfigRequest request = new TestConfigRequest()
-        request.setTargetTps(100)
-        request.setMaxConcurrency(10)
+        request.setMode(LoadTestMode.CONCURRENCY_BASED)
+        request.setStartingConcurrency(10)
+        request.setMaxConcurrency(100)
+        request.setRampStrategyType(RampStrategyType.STEP)
+        request.setRampStep(10)
+        request.setRampIntervalSeconds(30L)
         request.setTestDurationSeconds(60)
-        request.setRampUpDurationSeconds(5)
         
         String requestJson = objectMapper.writeValueAsString(request)
         when(testExecutionService.startTest(any(TestConfigRequest))).thenReturn("test-123")
@@ -60,7 +65,8 @@ class TestControllerSpec extends Specification {
     def "should reject invalid test configuration"() {
         given:
         TestConfigRequest request = new TestConfigRequest()
-        // Missing required fields - will fail validation
+        // Set invalid values - maxConcurrency below minimum
+        request.setMaxConcurrency(0)  // Invalid: must be >= 1
         String requestJson = objectMapper.writeValueAsString(request)
 
         when:
@@ -168,10 +174,13 @@ class TestControllerSpec extends Specification {
     def "should handle service exception when starting test"() {
         given:
         TestConfigRequest request = new TestConfigRequest()
-        request.setTargetTps(100)
-        request.setMaxConcurrency(10)
+        request.setMode(LoadTestMode.CONCURRENCY_BASED)
+        request.setStartingConcurrency(10)
+        request.setMaxConcurrency(100)
+        request.setRampStrategyType(RampStrategyType.STEP)
+        request.setRampStep(10)
+        request.setRampIntervalSeconds(30L)
         request.setTestDurationSeconds(60)
-        request.setRampUpDurationSeconds(0)
         
         String requestJson = objectMapper.writeValueAsString(request)
         when(testExecutionService.startTest(any(TestConfigRequest)))
@@ -190,42 +199,15 @@ class TestControllerSpec extends Specification {
     }
 
     @Unroll
-    def "should validate targetTps: #tps is #validity"() {
-        given:
-        TestConfigRequest request = new TestConfigRequest()
-        request.setTargetTps(tps)
-        request.setMaxConcurrency(10)
-        request.setTestDurationSeconds(60)
-        request.setRampUpDurationSeconds(0)
-        
-        String requestJson = objectMapper.writeValueAsString(request)
-
-        when:
-        def result = mockMvc.perform(
-            post("/api/tests")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(requestJson)
-        )
-
-        then:
-        result.andExpect(status()."${expectedStatus}"())
-
-        where:
-        tps    || validity  | expectedStatus
-        null   || "invalid" | "isBadRequest"
-        0      || "invalid" | "isBadRequest"
-        -1     || "invalid" | "isBadRequest"
-        100001 || "invalid" | "isBadRequest"
-    }
-
-    @Unroll
     def "should validate maxConcurrency: #concurrency is #validity"() {
         given:
         TestConfigRequest request = new TestConfigRequest()
-        request.setTargetTps(100)
         request.setMaxConcurrency(concurrency)
+        request.setStartingConcurrency(10)
         request.setTestDurationSeconds(60)
-        request.setRampUpDurationSeconds(0)
+        request.setRampStrategyType(com.vajraedge.perftest.concurrency.RampStrategyType.STEP)
+        request.setRampStep(10)
+        request.setRampIntervalSeconds(30L)
         
         String requestJson = objectMapper.writeValueAsString(request)
 

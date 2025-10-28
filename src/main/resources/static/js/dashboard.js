@@ -1,6 +1,34 @@
 // Main dashboard logic
 let currentTest = null;
 let statusPollingInterval = null;
+let previousMetrics = null; // Track previous metrics for diagnostics
+
+// Handle test mode change
+document.getElementById('testMode').addEventListener('change', function() {
+    const mode = this.value;
+    const tpsLimitField = document.getElementById('tpsLimitField');
+    
+    if (mode === 'RATE_LIMITED') {
+        tpsLimitField.classList.remove('d-none');
+    } else {
+        tpsLimitField.classList.add('d-none');
+    }
+});
+
+// Handle ramp strategy change
+document.getElementById('rampStrategy').addEventListener('change', function() {
+    const strategy = this.value;
+    const stepFields = document.getElementById('stepStrategyFields');
+    const linearFields = document.getElementById('linearStrategyFields');
+    
+    if (strategy === 'STEP') {
+        stepFields.classList.remove('d-none');
+        linearFields.classList.add('d-none');
+    } else {
+        stepFields.classList.add('d-none');
+        linearFields.classList.remove('d-none');
+    }
+});
 
 // Update task parameter help text based on task type
 document.getElementById('taskType').addEventListener('change', function() {
@@ -25,15 +53,35 @@ document.getElementById('testConfigForm').addEventListener('submit', async funct
     
     const taskType = document.getElementById('taskType').value;
     const taskParameterValue = document.getElementById('taskParameter').value;
+    const testMode = document.getElementById('testMode').value;
+    const rampStrategy = document.getElementById('rampStrategy').value;
     
+    // Build config based on selected mode and strategy
     const config = {
-        targetTps: parseInt(document.getElementById('targetTps').value),
+        mode: testMode,
+        startingConcurrency: parseInt(document.getElementById('startingConcurrency').value),
         maxConcurrency: parseInt(document.getElementById('maxConcurrency').value),
+        rampStrategyType: rampStrategy,
         testDurationSeconds: parseInt(document.getElementById('testDuration').value),
-        rampUpDurationSeconds: parseInt(document.getElementById('rampUpDuration').value),
         taskType: taskType,
         taskParameter: taskType === 'HTTP' ? taskParameterValue : parseInt(taskParameterValue)
     };
+    
+    // Add strategy-specific fields
+    if (rampStrategy === 'STEP') {
+        config.rampStep = parseInt(document.getElementById('rampStep').value);
+        config.rampIntervalSeconds = parseInt(document.getElementById('rampInterval').value);
+    } else {
+        config.rampDurationSeconds = parseInt(document.getElementById('rampDuration').value);
+    }
+    
+    // Add TPS limit for hybrid mode
+    if (testMode === 'RATE_LIMITED') {
+        const maxTpsLimit = document.getElementById('maxTpsLimit').value;
+        if (maxTpsLimit) {
+            config.maxTpsLimit = parseInt(maxTpsLimit);
+        }
+    }
     
     try {
         document.getElementById('startBtn').disabled = true;
@@ -76,7 +124,7 @@ document.getElementById('testConfigForm').addEventListener('submit', async funct
         }
         
         // Update UI
-        document.getElementById('currentTestId').textContent = result.testId.substring(0, 8);
+        document.getElementById('currentTestId').textContent = result.testId;
         document.getElementById('testStatus').textContent = 'RUNNING';
         document.getElementById('stopBtn').disabled = false;
         
@@ -143,18 +191,21 @@ window.updateMetricsDisplay = function updateMetricsDisplay(metrics) {
         const totalRequestsEl = document.getElementById('totalRequests');
         const currentTpsEl = document.getElementById('currentTps');
         const activeTasksEl = document.getElementById('activeTasks');
+        const pendingTasksEl = document.getElementById('pendingTasks');
         const avgLatencyEl = document.getElementById('avgLatency');
         
         console.log('DOM elements found:', {
             totalRequests: !!totalRequestsEl,
             currentTps: !!currentTpsEl,
             activeTasks: !!activeTasksEl,
+            pendingTasks: !!pendingTasksEl,
             avgLatency: !!avgLatencyEl
         });
         
         if (totalRequestsEl) totalRequestsEl.textContent = formatNumber(metrics.totalRequests || 0);
         if (currentTpsEl) currentTpsEl.textContent = formatNumber(metrics.currentTps || 0);
         if (activeTasksEl) activeTasksEl.textContent = formatNumber(metrics.activeTasks || 0);
+        if (pendingTasksEl) pendingTasksEl.textContent = formatNumber(metrics.pendingTasks || 0);
         if (avgLatencyEl) avgLatencyEl.textContent = formatLatency(metrics.avgLatencyMs || 0);
     
     // Update success rate
@@ -180,8 +231,85 @@ window.updateMetricsDisplay = function updateMetricsDisplay(metrics) {
         const elapsed = Math.floor((new Date() - currentTest.startTime) / 1000);
         document.getElementById('elapsedTime').textContent = formatDuration(elapsed);
     }
+    
+    // Update diagnostics panel
+    updateDiagnostics(metrics);
+    
+    // Store for next calculation
+    previousMetrics = metrics;
     } catch (error) {
         console.error('Error in updateMetricsDisplay:', error);
+    }
+}
+
+// Update diagnostics panel with detailed metrics
+function updateDiagnostics(metrics) {
+    try {
+        // Virtual Users / Active Tasks
+        const virtualUsers = metrics.activeTasks || 0;
+        document.getElementById('diagVirtualUsers').textContent = formatNumber(virtualUsers);
+        
+        // Tasks per user per second
+        const tps = metrics.currentTps || 0;
+        const tasksPerUser = virtualUsers > 0 ? (tps / virtualUsers).toFixed(2) : '0.00';
+        document.getElementById('diagTasksPerUser').textContent = tasksPerUser;
+        
+        // Submitted and Completed (calculate from total)
+        const totalRequests = metrics.totalRequests || 0;
+        const activeTasks = metrics.activeTasks || 0;
+        const pendingTasks = metrics.pendingTasks || 0;
+        
+        document.getElementById('diagSubmitted').textContent = formatNumber(totalRequests + activeTasks + pendingTasks);
+        document.getElementById('diagCompleted').textContent = formatNumber(totalRequests);
+        
+        // Queue Depth (pending tasks)
+        const queueDepth = pendingTasks;
+        const queueEl = document.getElementById('diagQueueDepth');
+        queueEl.textContent = formatNumber(queueDepth);
+        if (queueDepth === 0) {
+            queueEl.className = 'badge bg-success';
+        } else if (queueDepth < 100) {
+            queueEl.className = 'badge bg-warning';
+        } else {
+            queueEl.className = 'badge bg-danger';
+        }
+        
+        // Latency Ratio (P99/P50)
+        if (metrics.latencyPercentiles && metrics.latencyPercentiles.p50 > 0) {
+            const p50 = metrics.latencyPercentiles.p50;
+            const p99 = metrics.latencyPercentiles.p99;
+            const ratio = (p99 / p50).toFixed(2);
+            document.getElementById('diagLatencyRatio').textContent = ratio + 'x';
+        } else {
+            document.getElementById('diagLatencyRatio').textContent = '-';
+        }
+        
+        // TPS Efficiency (how well VajraEdge is keeping up)
+        // If pending tasks are building up, efficiency drops
+        const efficiency = queueDepth === 0 ? 100 : Math.max(0, 100 - (queueDepth / virtualUsers) * 100);
+        document.getElementById('diagEfficiency').textContent = efficiency.toFixed(1) + '%';
+        
+        // Bottleneck Indicator
+        const bottleneckEl = document.getElementById('diagBottleneck');
+        if (queueDepth > virtualUsers * 0.5) {
+            // Significant queue buildup = VajraEdge bottleneck
+            bottleneckEl.textContent = 'VajraEdge (Queue Buildup)';
+            bottleneckEl.className = 'badge bg-danger';
+        } else if (virtualUsers > 100 && previousMetrics && Math.abs(tps - (previousMetrics.currentTps || 0)) < 100) {
+            // TPS plateaued with increasing users = Service bottleneck
+            bottleneckEl.textContent = 'HTTP Service (Saturated)';
+            bottleneckEl.className = 'badge bg-warning';
+        } else if (queueDepth === 0 && virtualUsers > 0) {
+            // No queue, tasks flowing = Healthy
+            bottleneckEl.textContent = 'None (Healthy)';
+            bottleneckEl.className = 'badge bg-success';
+        } else {
+            bottleneckEl.textContent = 'Analyzing...';
+            bottleneckEl.className = 'badge bg-secondary';
+        }
+        
+    } catch (error) {
+        console.error('Error updating diagnostics:', error);
     }
 }
 
