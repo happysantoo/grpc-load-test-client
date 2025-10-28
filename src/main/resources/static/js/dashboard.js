@@ -190,18 +190,21 @@ window.updateMetricsDisplay = function updateMetricsDisplay(metrics) {
         const totalRequestsEl = document.getElementById('totalRequests');
         const currentTpsEl = document.getElementById('currentTps');
         const activeTasksEl = document.getElementById('activeTasks');
+        const pendingTasksEl = document.getElementById('pendingTasks');
         const avgLatencyEl = document.getElementById('avgLatency');
         
         console.log('DOM elements found:', {
             totalRequests: !!totalRequestsEl,
             currentTps: !!currentTpsEl,
             activeTasks: !!activeTasksEl,
+            pendingTasks: !!pendingTasksEl,
             avgLatency: !!avgLatencyEl
         });
         
         if (totalRequestsEl) totalRequestsEl.textContent = formatNumber(metrics.totalRequests || 0);
         if (currentTpsEl) currentTpsEl.textContent = formatNumber(metrics.currentTps || 0);
         if (activeTasksEl) activeTasksEl.textContent = formatNumber(metrics.activeTasks || 0);
+        if (pendingTasksEl) pendingTasksEl.textContent = formatNumber(metrics.pendingTasks || 0);
         if (avgLatencyEl) avgLatencyEl.textContent = formatLatency(metrics.avgLatencyMs || 0);
     
     // Update success rate

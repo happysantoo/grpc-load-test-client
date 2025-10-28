@@ -48,6 +48,7 @@ public class MetricsWebSocketHandler {
                 
                 // Also include execution status
                 metrics.setActiveTasks((int) execution.getActiveTasks());
+                metrics.setPendingTasks(execution.getPendingTasks());
                 
                 // Broadcast to topic for this specific test
                 messagingTemplate.convertAndSend("/topic/metrics/" + testId, metrics);

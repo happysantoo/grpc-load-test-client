@@ -14,6 +14,7 @@ public class MetricsResponse {
     private Long failedRequests;
     private Double successRate;
     private Integer activeTasks;
+    private Integer pendingTasks; // Tasks submitted but not yet started (queued/waiting)
     private Double currentTps;
     private Map<String, Double> latencyPercentiles; // p50, p75, p90, p95, p99, p99.9
     private Double avgLatencyMs;
@@ -76,6 +77,14 @@ public class MetricsResponse {
     
     public void setActiveTasks(Integer activeTasks) {
         this.activeTasks = activeTasks;
+    }
+    
+    public Integer getPendingTasks() {
+        return pendingTasks;
+    }
+    
+    public void setPendingTasks(Integer pendingTasks) {
+        this.pendingTasks = pendingTasks;
     }
     
     public Double getCurrentTps() {

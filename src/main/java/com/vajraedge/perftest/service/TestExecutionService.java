@@ -402,6 +402,15 @@ public class TestExecutionService {
             return 0;
         }
         
+        public int getPendingTasks() {
+            if (runner instanceof PerformanceTestRunner) {
+                return ((PerformanceTestRunner) runner).getExecutor().getPendingTasks();
+            } else if (runner instanceof ConcurrencyBasedTestRunner) {
+                return ((ConcurrencyBasedTestRunner) runner).getExecutor().getPendingTasks();
+            }
+            return 0;
+        }
+        
         public void closeRunner() {
             if (runner instanceof PerformanceTestRunner) {
                 ((PerformanceTestRunner) runner).close();
