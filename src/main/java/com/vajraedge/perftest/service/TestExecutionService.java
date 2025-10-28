@@ -139,6 +139,20 @@ public class TestExecutionService {
     }
     
     /**
+     * Get pending tasks count for a specific test.
+     * 
+     * @param testId test ID
+     * @return number of pending tasks, or 0 if test not found
+     */
+    public int getPendingTasks(String testId) {
+        TestExecution execution = activeTests.get(testId);
+        if (execution != null) {
+            return execution.getPendingTasks();
+        }
+        return 0;
+    }
+    
+    /**
      * Stop a running test.
      */
     public boolean stopTest(String testId) {
@@ -412,6 +426,15 @@ public class TestExecutionService {
                 return ((ConcurrencyBasedTestRunner) runner).getExecutor().getPendingTasks();
             }
             return 0;
+        }
+        
+        public com.vajraedge.perftest.executor.VirtualThreadTaskExecutor getExecutor() {
+            if (runner instanceof PerformanceTestRunner) {
+                return ((PerformanceTestRunner) runner).getExecutor();
+            } else if (runner instanceof ConcurrencyBasedTestRunner) {
+                return ((ConcurrencyBasedTestRunner) runner).getExecutor();
+            }
+            return null;
         }
         
         public void closeRunner() {

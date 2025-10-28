@@ -17,6 +17,7 @@ VajraEdge is a modern, high-performance load testing framework built with Java 2
 - Error messages should be helpful and actionable
 - Documentation should be inline and up-to-date
 
+
 ### 3. Performance Without Compromise
 - Leverage Java 21 features (virtual threads, pattern matching, records)
 - Avoid premature optimization, but design for scalability
@@ -28,6 +29,7 @@ VajraEdge is a modern, high-performance load testing framework built with Java 2
 - Proper logging at appropriate levels (DEBUG, INFO, WARN, ERROR)
 - Graceful degradation and circuit breaker patterns where appropriate
 - Security best practices (input validation, sanitization)
+- Always make sure to run gralde build and test to verify correctness before committing changes
 
 ## Code Conventions
 
