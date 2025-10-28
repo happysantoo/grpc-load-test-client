@@ -157,15 +157,29 @@ public class ConcurrencyBasedTestRunner {
      * Shutdown all active virtual users.
      */
     private void shutdownAllUsers() {
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        
         synchronized (activeUsers) {
             logger.info("Shutting down {} virtual users", activeUsers.size());
             
+            // Stop all users and collect their futures
             for (VirtualUser user : activeUsers) {
                 user.stop();
+                futures.add(user.future);
             }
             
             activeUsers.clear();
         }
+        
+        // Wait for all users to complete (with timeout)
+        try {
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .get(5, java.util.concurrent.TimeUnit.SECONDS);
+            logger.debug("All virtual users stopped gracefully");
+        } catch (Exception e) {
+            logger.warn("Timeout waiting for virtual users to stop, proceeding with shutdown", e);
+        }
+        
         executor.close();
     }
     
@@ -225,22 +239,29 @@ public class ConcurrencyBasedTestRunner {
         void run() {
             logger.trace("Virtual user started");
             
-            while (running.get() && !stopRequested.get()) {
-                try {
-                    // Create and execute task
-                    long taskId = taskIdGenerator.incrementAndGet();
-                    Task task = taskFactory.createTask(taskId);
-                    TaskResult result = task.execute();
-                    
-                    // Record metrics
-                    metricsCollector.recordResult(result);
-                    
-                } catch (Exception e) {
-                    logger.error("Error executing task in virtual user", e);
+            try {
+                while (running.get() && !stopRequested.get() && !Thread.currentThread().isInterrupted()) {
+                    try {
+                        // Create and execute task
+                        long taskId = taskIdGenerator.incrementAndGet();
+                        Task task = taskFactory.createTask(taskId);
+                        TaskResult result = task.execute();
+                        
+                        // Record metrics
+                        metricsCollector.recordResult(result);
+                        
+                    } catch (InterruptedException e) {
+                        logger.debug("Virtual user interrupted during task execution", e);
+                        Thread.currentThread().interrupt(); // Restore interrupted status
+                        break; // Exit loop on interruption
+                    } catch (Exception e) {
+                        logger.error("Error executing task in virtual user", e);
+                        // Continue running despite individual task failures
+                    }
                 }
+            } finally {
+                logger.trace("Virtual user stopped");
             }
-            
-            logger.trace("Virtual user stopped");
         }
         
         void start() {
