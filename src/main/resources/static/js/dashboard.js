@@ -1,6 +1,7 @@
 // Main dashboard logic
 let currentTest = null;
 let statusPollingInterval = null;
+let previousMetrics = null; // Track previous metrics for diagnostics
 
 // Handle test mode change
 document.getElementById('testMode').addEventListener('change', function() {
@@ -230,8 +231,85 @@ window.updateMetricsDisplay = function updateMetricsDisplay(metrics) {
         const elapsed = Math.floor((new Date() - currentTest.startTime) / 1000);
         document.getElementById('elapsedTime').textContent = formatDuration(elapsed);
     }
+    
+    // Update diagnostics panel
+    updateDiagnostics(metrics);
+    
+    // Store for next calculation
+    previousMetrics = metrics;
     } catch (error) {
         console.error('Error in updateMetricsDisplay:', error);
+    }
+}
+
+// Update diagnostics panel with detailed metrics
+function updateDiagnostics(metrics) {
+    try {
+        // Virtual Users / Active Tasks
+        const virtualUsers = metrics.activeTasks || 0;
+        document.getElementById('diagVirtualUsers').textContent = formatNumber(virtualUsers);
+        
+        // Tasks per user per second
+        const tps = metrics.currentTps || 0;
+        const tasksPerUser = virtualUsers > 0 ? (tps / virtualUsers).toFixed(2) : '0.00';
+        document.getElementById('diagTasksPerUser').textContent = tasksPerUser;
+        
+        // Submitted and Completed (calculate from total)
+        const totalRequests = metrics.totalRequests || 0;
+        const activeTasks = metrics.activeTasks || 0;
+        const pendingTasks = metrics.pendingTasks || 0;
+        
+        document.getElementById('diagSubmitted').textContent = formatNumber(totalRequests + activeTasks + pendingTasks);
+        document.getElementById('diagCompleted').textContent = formatNumber(totalRequests);
+        
+        // Queue Depth (pending tasks)
+        const queueDepth = pendingTasks;
+        const queueEl = document.getElementById('diagQueueDepth');
+        queueEl.textContent = formatNumber(queueDepth);
+        if (queueDepth === 0) {
+            queueEl.className = 'badge bg-success';
+        } else if (queueDepth < 100) {
+            queueEl.className = 'badge bg-warning';
+        } else {
+            queueEl.className = 'badge bg-danger';
+        }
+        
+        // Latency Ratio (P99/P50)
+        if (metrics.latencyPercentiles && metrics.latencyPercentiles.p50 > 0) {
+            const p50 = metrics.latencyPercentiles.p50;
+            const p99 = metrics.latencyPercentiles.p99;
+            const ratio = (p99 / p50).toFixed(2);
+            document.getElementById('diagLatencyRatio').textContent = ratio + 'x';
+        } else {
+            document.getElementById('diagLatencyRatio').textContent = '-';
+        }
+        
+        // TPS Efficiency (how well VajraEdge is keeping up)
+        // If pending tasks are building up, efficiency drops
+        const efficiency = queueDepth === 0 ? 100 : Math.max(0, 100 - (queueDepth / virtualUsers) * 100);
+        document.getElementById('diagEfficiency').textContent = efficiency.toFixed(1) + '%';
+        
+        // Bottleneck Indicator
+        const bottleneckEl = document.getElementById('diagBottleneck');
+        if (queueDepth > virtualUsers * 0.5) {
+            // Significant queue buildup = VajraEdge bottleneck
+            bottleneckEl.textContent = 'VajraEdge (Queue Buildup)';
+            bottleneckEl.className = 'badge bg-danger';
+        } else if (virtualUsers > 100 && previousMetrics && Math.abs(tps - (previousMetrics.currentTps || 0)) < 100) {
+            // TPS plateaued with increasing users = Service bottleneck
+            bottleneckEl.textContent = 'HTTP Service (Saturated)';
+            bottleneckEl.className = 'badge bg-warning';
+        } else if (queueDepth === 0 && virtualUsers > 0) {
+            // No queue, tasks flowing = Healthy
+            bottleneckEl.textContent = 'None (Healthy)';
+            bottleneckEl.className = 'badge bg-success';
+        } else {
+            bottleneckEl.textContent = 'Analyzing...';
+            bottleneckEl.className = 'badge bg-secondary';
+        }
+        
+    } catch (error) {
+        console.error('Error updating diagnostics:', error);
     }
 }
 

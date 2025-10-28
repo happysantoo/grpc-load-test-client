@@ -216,6 +216,73 @@
                         </div>
                     </div>
 
+                    <!-- Diagnostics Panel -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">📊 Performance Diagnostics</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <h6 class="text-muted">Concurrency Metrics</h6>
+                                    <table class="table table-sm table-borderless">
+                                        <tbody>
+                                            <tr>
+                                                <td><strong>Virtual Users:</strong></td>
+                                                <td class="text-end"><span id="diagVirtualUsers">-</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Tasks/User/Sec:</strong></td>
+                                                <td class="text-end"><span id="diagTasksPerUser">-</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Submitted Tasks:</strong></td>
+                                                <td class="text-end"><span id="diagSubmitted">-</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Completed Tasks:</strong></td>
+                                                <td class="text-end"><span id="diagCompleted">-</span></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-muted">Bottleneck Analysis</h6>
+                                    <table class="table table-sm table-borderless">
+                                        <tbody>
+                                            <tr>
+                                                <td><strong>Queue Depth:</strong></td>
+                                                <td class="text-end"><span id="diagQueueDepth" class="badge bg-secondary">-</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Latency Ratio (P99/P50):</strong></td>
+                                                <td class="text-end"><span id="diagLatencyRatio">-</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>TPS Efficiency:</strong></td>
+                                                <td class="text-end"><span id="diagEfficiency">-</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Bottleneck Indicator:</strong></td>
+                                                <td class="text-end"><span id="diagBottleneck" class="badge bg-success">Analyzing...</span></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="alert alert-info mb-0">
+                                <small>
+                                    <strong>💡 Reading the Diagnostics:</strong><br>
+                                    <strong>Tasks/User/Sec:</strong> Higher is better (service responding quickly)<br>
+                                    <strong>Queue Depth:</strong> Should be 0 (pending tasks building up indicates bottleneck)<br>
+                                    <strong>Latency Ratio:</strong> Close to 1.0 is ideal (consistent response times)<br>
+                                    <strong>TPS Efficiency:</strong> ~100% means VajraEdge is keeping up<br>
+                                    <strong>Bottleneck:</strong> Shows whether HTTP service or VajraEdge is limiting throughput
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Charts -->
                     <div class="card mb-3">
                         <div class="card-header">
