@@ -356,4 +356,90 @@ class VirtualThreadTaskExecutorSpec extends Specification {
         then:
         notThrown(Exception)
     }
+
+    def "should calculate pending tasks correctly"() {
+        given:
+        executor = new VirtualThreadTaskExecutor(10)
+        CountDownLatch blockLatch = new CountDownLatch(1)
+        int submittedCount = 5
+        
+        Task blockingTask = { ->
+            blockLatch.await()
+            return SimpleTaskResult.success(1L, 1_000_000L)
+        } as Task
+
+        when: "submit multiple tasks that will block"
+        (1..submittedCount).each { executor.submit(blockingTask) }
+        Thread.sleep(100) // Allow tasks to start
+
+        then: "pending tasks should be submitted - completed - active"
+        executor.getActiveTasks() == submittedCount
+        executor.getCompletedTasks() == 0
+        executor.getPendingTasks() == 0  // All tasks are active, none pending
+
+        when: "complete the tasks"
+        blockLatch.countDown()
+        Thread.sleep(100)
+
+        then: "pending should still be zero, all completed"
+        executor.getPendingTasks() == 0
+        executor.getCompletedTasks() == submittedCount
+    }
+
+    def "should show pending tasks when submission exceeds active capacity"() {
+        given:
+        int maxConcurrency = 3
+        executor = new VirtualThreadTaskExecutor(maxConcurrency)
+        CountDownLatch blockLatch = new CountDownLatch(1)
+        CountDownLatch activeLatch = new CountDownLatch(maxConcurrency)
+        
+        Task blockingTask = { ->
+            activeLatch.countDown()
+            blockLatch.await(5, TimeUnit.SECONDS)  // Add timeout to prevent hanging
+            return SimpleTaskResult.success(1L, 1_000_000L)
+        } as Task
+
+        when: "submit more tasks than max concurrency"
+        List<CompletableFuture<TaskResult>> futures = []
+        (1..10).each { futures.add(executor.submit(blockingTask)) }
+        boolean activeReached = activeLatch.await(2, TimeUnit.SECONDS)
+
+        then: "should have active tasks at max concurrency"
+        activeReached
+        executor.getActiveTasks() == maxConcurrency
+        executor.getSubmittedTasks() == 10
+        executor.getPendingTasks() == 10 - maxConcurrency - 0  // submitted - active - completed
+
+        cleanup:
+        blockLatch.countDown()
+        Thread.sleep(100)  // Give tasks time to complete
+        // Don't wait for futures in cleanup to avoid hanging if test fails
+    }
+
+    def "should track pending tasks as they complete"() {
+        given:
+        int maxConcurrency = 2
+        executor = new VirtualThreadTaskExecutor(maxConcurrency)
+        
+        Task quickTask = { ->
+            Thread.sleep(50)
+            return SimpleTaskResult.success(1L, 50_000_000L)
+        } as Task
+
+        when: "submit 5 tasks with concurrency limit of 2"
+        List<CompletableFuture<TaskResult>> futures = (1..5).collect { executor.submit(quickTask) }
+        Thread.sleep(25) // Let first batch start
+
+        then: "should have 2 active and 3 pending"
+        executor.getActiveTasks() <= maxConcurrency
+        executor.getPendingTasks() >= 3
+
+        when: "wait for all to complete"
+        futures.each { it.get(5, TimeUnit.SECONDS) }  // Increased timeout for safety
+
+        then: "all completed, no pending"
+        executor.getCompletedTasks() == 5
+        executor.getPendingTasks() == 0
+        executor.getActiveTasks() == 0
+    }
 }
