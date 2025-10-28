@@ -119,15 +119,105 @@ public double getRampUpProgress(long elapsedSeconds) {
 }
 ```
 
-### 4. Test Improvements ✅
-**Issue:** HttpTaskSpec test failing due to slow external service  
-**Solution:**
-- Increased timeout tolerance from 30s to 60s
-- Better handling of unreliable external service (httpbin.org)
-- More resilient tests that don't fail on slow networks
+### 6. Refactored ConcurrencyBasedTestRunner** ✅
+**Issue:** Large class (256 lines) with multiple responsibilities  
+**Solution:** Extracted into three focused classes
+
+#### a) VirtualUser Class
+- Standalone class for single virtual user lifecycle
+- Encapsulates task execution loop and interruption handling
+- Provides `getFuture()` for graceful shutdown coordination
+- Added `isRunning()` method for status checking
 
 **Code:**
-```groovy
+```java
+public class VirtualUser {
+    private final TaskFactory taskFactory;
+    private final MetricsCollector metricsCollector;
+    private final AtomicLong taskIdGenerator;
+    private final AtomicBoolean stopRequested;
+    private final CompletableFuture<Void> future;
+    private final AtomicBoolean running;
+    
+    public VirtualUser(TaskFactory taskFactory, MetricsCollector metricsCollector, 
+                      AtomicLong taskIdGenerator, AtomicBoolean stopRequested) {
+        // Initialize and start execution
+}
+```
+
+### 7. Test Improvements ✅
+    
+    private void run() {
+        // Task execution loop with proper error handling
+    }
+    
+    public void stop() {
+        running.set(false);
+        future.cancel(true);
+    }
+}
+```
+
+#### b) VirtualUserManager Class
+- Manages lifecycle of all virtual users
+- Handles ramp-up and ramp-down operations
+- Coordinates graceful shutdown with timeout
+- Provides thread-safe concurrency adjustments
+
+**Code:**
+```java
+public class VirtualUserManager {
+    public void adjustConcurrency(int targetConcurrency) {
+        synchronized (activeUsers) {
+            if (targetConcurrency > currentConcurrency) {
+                rampUp(targetConcurrency - currentConcurrency, ...);
+            } else if (targetConcurrency < currentConcurrency) {
+                rampDown(currentConcurrency - targetConcurrency, ...);
+            }
+        }
+    }
+    
+    public void shutdownAll() {
+        // Collect futures and wait with timeout
+    }
+}
+```
+
+#### c) Refactored ConcurrencyBasedTestRunner
+- Simplified from 256 to 164 lines
+- Delegates user management to VirtualUserManager
+- Cleaner separation of concerns:
+  - **Orchestration**: ConcurrencyBasedTestRunner
+  - **User lifecycle**: VirtualUserManager
+  - **Individual execution**: VirtualUser
+
+**Benefits:**
+- Improved maintainability (smaller, focused classes)
+- Better testability (each class tested independently)
+- Clearer responsibilities (Single Responsibility Principle)
+- Easier to extend (add new management strategies)
+- Reduced cognitive load (each class < 200 lines)
+
+### 7. Test Improvements ✅
+**Issue:** HttpTaskSpec test failing due to slow external service  
+### 3. Maintainability
+- Smaller, focused classes (VirtualUser, VirtualUserManager)
+- Single Responsibility Principle applied
+- Easier to test and extend
+- Better code organization
+## Next Steps
+After this PR is merged:
+1. ~~Consider refactoring ConcurrencyBasedTestRunner~~ ✅ Complete
+2. Add integration tests for high concurrency (1000+ users)
+3. Add performance benchmarks comparing TPS vs Concurrency modes
+4. Implement circuit breaker for failing virtual users
+
+## Commits
+1. `feat: implement PR #4 review recommendations` - Enhanced error handling, metrics, and resource management
+2. `docs: add PR #5 summary document` - Comprehensive documentation
+3. `refactor: break down ConcurrencyBasedTestRunner into focused classes` - Extracted VirtualUser and VirtualUserManager
+
+## Verification Checklist
 def "should record latency for all requests"() {
     given: "an HTTP task"
     def task = new HttpTask("https://httpbin.org/delay/0")
@@ -164,7 +254,7 @@ def "should record latency for all requests"() {
 | Add ramp-up progress metrics | ✅ Complete | Added to ConcurrencyController |
 | Add task queue depth metrics | ✅ Complete | Already available via getPendingTasks() |
 | Verify error handling in WebSocket | ✅ Complete | Already has try-catch blocks |
-| Refactor large classes | ⏭️ Skipped | Optional - can be done in future PR |
+| Refactor large classes | ✅ Complete | Extracted VirtualUser and VirtualUserManager |
 
 ## Testing
 
