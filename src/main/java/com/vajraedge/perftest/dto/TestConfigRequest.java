@@ -42,6 +42,10 @@ public class TestConfigRequest {
     @Min(value = 1, message = "Ramp duration must be at least 1 second")
     private Long rampDurationSeconds;
     
+    // Sustain phase parameters
+    @Min(value = 0, message = "Sustain duration cannot be negative")
+    private Long sustainDurationSeconds = 0L;
+    
     // Common parameters
     @NotNull(message = "Test duration in seconds cannot be null")
     @Min(value = 1, message = "Test duration must be at least 1 second")
@@ -141,6 +145,14 @@ public class TestConfigRequest {
     
     public void setRampDurationSeconds(Long rampDurationSeconds) {
         this.rampDurationSeconds = rampDurationSeconds;
+    }
+    
+    public Long getSustainDurationSeconds() {
+        return sustainDurationSeconds;
+    }
+    
+    public void setSustainDurationSeconds(Long sustainDurationSeconds) {
+        this.sustainDurationSeconds = sustainDurationSeconds;
     }
     
     public Long getTestDurationSeconds() {

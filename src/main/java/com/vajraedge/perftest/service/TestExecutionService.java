@@ -273,19 +273,22 @@ public class TestExecutionService {
         RampStrategyType strategyType = config.getRampStrategyType() != null ? 
             config.getRampStrategyType() : RampStrategyType.STEP;
         
+        long sustainDuration = config.getSustainDurationSeconds() != null ? 
+            config.getSustainDurationSeconds() : 0L;
+        
         if (strategyType == RampStrategyType.LINEAR) {
             int startConcurrency = config.getStartingConcurrency() != null ? config.getStartingConcurrency() : 10;
             int maxConcurrency = config.getMaxConcurrency() != null ? config.getMaxConcurrency() : 100;
             long rampDuration = config.getRampDurationSeconds() != null ? config.getRampDurationSeconds() : 60L;
             
-            rampStrategy = new LinearRampStrategy(startConcurrency, maxConcurrency, rampDuration);
+            rampStrategy = new LinearRampStrategy(startConcurrency, maxConcurrency, rampDuration, sustainDuration);
         } else {
             int startConcurrency = config.getStartingConcurrency() != null ? config.getStartingConcurrency() : 10;
             int rampStep = config.getRampStep() != null ? config.getRampStep() : 10;
             long rampInterval = config.getRampIntervalSeconds() != null ? config.getRampIntervalSeconds() : 30L;
             int maxConcurrency = config.getMaxConcurrency() != null ? config.getMaxConcurrency() : 100;
             
-            rampStrategy = new StepRampStrategy(startConcurrency, rampStep, rampInterval, maxConcurrency);
+            rampStrategy = new StepRampStrategy(startConcurrency, rampStep, rampInterval, maxConcurrency, sustainDuration);
         }
         
         // Build concurrency controller

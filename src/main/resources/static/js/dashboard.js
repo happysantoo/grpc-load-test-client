@@ -63,6 +63,7 @@ document.getElementById('testConfigForm').addEventListener('submit', async funct
         maxConcurrency: parseInt(document.getElementById('maxConcurrency').value),
         rampStrategyType: rampStrategy,
         testDurationSeconds: parseInt(document.getElementById('testDuration').value),
+        sustainDurationSeconds: parseInt(document.getElementById('sustainDuration').value) || 0,
         taskType: taskType,
         taskParameter: taskType === 'HTTP' ? taskParameterValue : parseInt(taskParameterValue)
     };
@@ -230,6 +231,9 @@ window.updateMetricsDisplay = function updateMetricsDisplay(metrics) {
     if (currentTest) {
         const elapsed = Math.floor((new Date() - currentTest.startTime) / 1000);
         document.getElementById('elapsedTime').textContent = formatDuration(elapsed);
+        
+        // Calculate and update test phase
+        updateTestPhase(elapsed, currentTest.config);
     }
     
     // Update diagnostics panel
@@ -310,6 +314,51 @@ function updateDiagnostics(metrics) {
         
     } catch (error) {
         console.error('Error updating diagnostics:', error);
+    }
+}
+
+// Update test phase indicator
+function updateTestPhase(elapsedSeconds, config) {
+    try {
+        const phaseEl = document.getElementById('testPhase');
+        if (!phaseEl || !config) return;
+        
+        const rampStrategy = config.rampStrategyType || 'STEP';
+        const sustainDuration = config.sustainDurationSeconds || 0;
+        let rampDuration = 0;
+        
+        // Calculate ramp duration based on strategy
+        if (rampStrategy === 'LINEAR') {
+            rampDuration = config.rampDurationSeconds || 60;
+        } else {
+            // STEP strategy
+            const startConcurrency = config.startingConcurrency || 10;
+            const maxConcurrency = config.maxConcurrency || 100;
+            const rampStep = config.rampStep || 10;
+            const rampInterval = config.rampIntervalSeconds || 30;
+            
+            const usersToAdd = maxConcurrency - startConcurrency;
+            const stepsNeeded = Math.ceil(usersToAdd / rampStep);
+            rampDuration = stepsNeeded * rampInterval;
+        }
+        
+        // Determine current phase
+        if (elapsedSeconds < rampDuration) {
+            const progress = ((elapsedSeconds / rampDuration) * 100).toFixed(0);
+            phaseEl.textContent = `Ramp-Up (${progress}%)`;
+            phaseEl.className = 'badge bg-primary';
+        } else if (sustainDuration > 0 && elapsedSeconds < (rampDuration + sustainDuration)) {
+            const sustainElapsed = elapsedSeconds - rampDuration;
+            const remainingSustain = sustainDuration - sustainElapsed;
+            phaseEl.textContent = `Sustain (${remainingSustain}s left)`;
+            phaseEl.className = 'badge bg-success';
+        } else {
+            phaseEl.textContent = 'Completed';
+            phaseEl.className = 'badge bg-secondary';
+        }
+        
+    } catch (error) {
+        console.error('Error updating test phase:', error);
     }
 }
 

@@ -85,6 +85,19 @@
                                 </div>
                             </div>
 
+                            <!-- Sustain Phase Field (common to all strategies) -->
+                            <div class="mb-3">
+                                <label for="sustainDuration" class="form-label">
+                                    Sustain Duration (seconds) 
+                                    <span class="badge bg-info">Optional</span>
+                                </label>
+                                <input type="number" class="form-control" id="sustainDuration" value="0" min="0">
+                                <div class="form-text">
+                                    Duration to maintain max concurrency after ramp-up completes. 
+                                    Set to 0 to skip sustain phase.
+                                </div>
+                            </div>
+
                             <!-- TPS Limit (for Hybrid mode) -->
                             <div id="tpsLimitField" class="d-none">
                                 <div class="mb-3">
@@ -161,6 +174,14 @@
                                 </div>
                                 <div class="col-md-3">
                                     <div class="metric-card">
+                                        <div class="metric-label">Test Phase</div>
+                                        <div class="metric-value">
+                                            <span id="testPhase" class="badge bg-secondary">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="metric-card">
                                         <div class="metric-label">Elapsed Time</div>
                                         <div class="metric-value" id="elapsedTime">0s</div>
                                     </div>
@@ -171,7 +192,9 @@
                                         <div class="metric-value" id="totalRequests">0</div>
                                     </div>
                                 </div>
-                                <div class="col-md-3">
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-md-12">
                                     <div class="metric-card">
                                         <div class="metric-label">Success Rate</div>
                                         <div class="metric-value" id="successRate">0%</div>
