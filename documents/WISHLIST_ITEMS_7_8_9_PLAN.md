@@ -1399,6 +1399,900 @@ public class WorkerServiceImpl extends WorkerServiceGrpc.WorkerServiceImplBase {
 
 ---
 
+## Item 10: Authentication Support (NEW)
+
+### 📋 Requirement
+> "Support authentication mechanisms while hitting resources like HTTP, database, Kafka etc. The solution preferably should not be in the business of storing credentials anywhere."
+
+### 🎯 Objective
+Provide flexible, secure authentication for all task types **without** storing credentials in VajraEdge. Delegate credential management to:
+- Environment variables
+- External secret managers (AWS Secrets Manager, Azure Key Vault, HashiCorp Vault)
+- Configuration files (user-managed, not in VajraEdge control)
+- Runtime injection (passed at test start time)
+
+### 🏗️ Architecture Design
+
+#### Core Principle: **Zero Trust - Zero Storage**
+VajraEdge acts as a **pass-through** for credentials, never persisting them to disk or database.
+
+#### Component Structure
+```
+com.vajraedge.perftest.auth/
+├── AuthProvider.java                 (Interface for auth strategies)
+├── AuthContext.java                  (Credential container - in-memory only)
+├── providers/
+│   ├── NoAuthProvider.java           (Default - no authentication)
+│   ├── BasicAuthProvider.java        (HTTP Basic Auth)
+│   ├── BearerTokenProvider.java      (OAuth2/JWT tokens)
+│   ├── ApiKeyProvider.java           (API key in header/query)
+│   ├── OAuth2Provider.java           (OAuth2 client credentials flow)
+│   ├── AwsSignatureProvider.java     (AWS SigV4)
+│   ├── MutualTLSProvider.java        (Certificate-based)
+│   └── DatabaseAuthProvider.java     (DB username/password)
+└── resolver/
+    ├── CredentialResolver.java       (Interface for credential sources)
+    ├── EnvVarResolver.java           (Read from environment)
+    ├── SecretManagerResolver.java    (AWS/Azure/Vault integration)
+    └── RuntimeResolver.java          (Passed in API request)
+```
+
+### 📝 Implementation Details
+
+#### 1. **AuthProvider Interface**
+
+```java
+package com.vajraedge.perftest.auth;
+
+/**
+ * Strategy for providing authentication to tasks.
+ * Implementations should be stateless and thread-safe.
+ */
+public interface AuthProvider {
+    
+    /**
+     * Apply authentication to the context.
+     * 
+     * @param context The authentication context with credentials
+     * @return Authenticated context (e.g., with headers, tokens)
+     * @throws AuthenticationException if auth fails
+     */
+    <T> T apply(AuthContext context, T target) throws AuthenticationException;
+    
+    /**
+     * Validate that required credentials are present.
+     */
+    void validate(AuthContext context) throws AuthenticationException;
+}
+```
+
+#### 2. **AuthContext** (In-Memory Credential Container)
+
+```java
+package com.vajraedge.perftest.auth;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Container for authentication credentials.
+ * NEVER persisted - exists only in memory during test execution.
+ * 
+ * WARNING: Do not log this object or its contents!
+ */
+public class AuthContext {
+    
+    private final Map<String, String> credentials;
+    private final String authType;
+    
+    private AuthContext(String authType, Map<String, String> credentials) {
+        this.authType = authType;
+        this.credentials = new HashMap<>(credentials);
+    }
+    
+    public static Builder builder(String authType) {
+        return new Builder(authType);
+    }
+    
+    public String getAuthType() {
+        return authType;
+    }
+    
+    public String getCredential(String key) {
+        return credentials.get(key);
+    }
+    
+    public boolean hasCredential(String key) {
+        return credentials.containsKey(key);
+    }
+    
+    @Override
+    public String toString() {
+        // NEVER expose credentials in toString!
+        return "AuthContext{authType='" + authType + "', credentials=<REDACTED>}";
+    }
+    
+    public static class Builder {
+        private final String authType;
+        private final Map<String, String> credentials = new HashMap<>();
+        
+        private Builder(String authType) {
+            this.authType = authType;
+        }
+        
+        public Builder credential(String key, String value) {
+            if (value != null) {
+                this.credentials.put(key, value);
+            }
+            return this;
+        }
+        
+        public AuthContext build() {
+            return new AuthContext(authType, credentials);
+        }
+    }
+}
+```
+
+#### 3. **HTTP Basic Auth Example**
+
+```java
+package com.vajraedge.perftest.auth.providers;
+
+import com.vajraedge.perftest.auth.AuthContext;
+import com.vajraedge.perftest.auth.AuthProvider;
+import com.vajraedge.perftest.auth.AuthenticationException;
+
+import java.net.http.HttpRequest;
+import java.util.Base64;
+
+public class BasicAuthProvider implements AuthProvider {
+    
+    @Override
+    public HttpRequest apply(AuthContext context, HttpRequest request) {
+        String username = context.getCredential("username");
+        String password = context.getCredential("password");
+        
+        String credentials = username + ":" + password;
+        String encoded = Base64.getEncoder().encodeToString(credentials.getBytes());
+        
+        return HttpRequest.newBuilder(request, (name, value) -> true)
+            .header("Authorization", "Basic " + encoded)
+            .build();
+    }
+    
+    @Override
+    public void validate(AuthContext context) throws AuthenticationException {
+        if (!context.hasCredential("username") || !context.hasCredential("password")) {
+            throw new AuthenticationException(
+                "Basic auth requires 'username' and 'password' credentials");
+        }
+    }
+}
+```
+
+#### 4. **Bearer Token (OAuth2/JWT) Provider**
+
+```java
+package com.vajraedge.perftest.auth.providers;
+
+import com.vajraedge.perftest.auth.AuthContext;
+import com.vajraedge.perftest.auth.AuthProvider;
+import com.vajraedge.perftest.auth.AuthenticationException;
+
+import java.net.http.HttpRequest;
+
+public class BearerTokenProvider implements AuthProvider {
+    
+    @Override
+    public HttpRequest apply(AuthContext context, HttpRequest request) {
+        String token = context.getCredential("token");
+        
+        return HttpRequest.newBuilder(request, (name, value) -> true)
+            .header("Authorization", "Bearer " + token)
+            .build();
+    }
+    
+    @Override
+    public void validate(AuthContext context) throws AuthenticationException {
+        if (!context.hasCredential("token")) {
+            throw new AuthenticationException(
+                "Bearer token auth requires 'token' credential");
+        }
+    }
+}
+```
+
+#### 5. **API Key Provider**
+
+```java
+package com.vajraedge.perftest.auth.providers;
+
+import com.vajraedge.perftest.auth.AuthContext;
+import com.vajraedge.perftest.auth.AuthProvider;
+import com.vajraedge.perftest.auth.AuthenticationException;
+
+import java.net.http.HttpRequest;
+
+/**
+ * API Key authentication provider.
+ * Supports both header-based and query-parameter-based API keys.
+ */
+public class ApiKeyProvider implements AuthProvider {
+    
+    @Override
+    public HttpRequest apply(AuthContext context, HttpRequest request) {
+        String apiKey = context.getCredential("apiKey");
+        String headerName = context.getCredential("headerName");
+        
+        if (headerName != null) {
+            // Header-based API key
+            return HttpRequest.newBuilder(request, (name, value) -> true)
+                .header(headerName, apiKey)
+                .build();
+        } else {
+            // Query parameter-based (user handles in URL)
+            return request;
+        }
+    }
+    
+    @Override
+    public void validate(AuthContext context) throws AuthenticationException {
+        if (!context.hasCredential("apiKey")) {
+            throw new AuthenticationException("API key auth requires 'apiKey' credential");
+        }
+    }
+}
+```
+
+#### 6. **OAuth2 Client Credentials Flow**
+
+```java
+package com.vajraedge.perftest.auth.providers;
+
+import com.vajraedge.perftest.auth.AuthContext;
+import com.vajraedge.perftest.auth.AuthProvider;
+import com.vajraedge.perftest.auth.AuthenticationException;
+
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Base64;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+/**
+ * OAuth2 Client Credentials flow provider.
+ * Automatically fetches and refreshes access tokens.
+ */
+public class OAuth2Provider implements AuthProvider {
+    
+    private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    
+    private String cachedToken;
+    private Instant tokenExpiry;
+    
+    @Override
+    public HttpRequest apply(AuthContext context, HttpRequest request) 
+            throws AuthenticationException {
+        
+        String token = getAccessToken(context);
+        
+        return HttpRequest.newBuilder(request, (name, value) -> true)
+            .header("Authorization", "Bearer " + token)
+            .build();
+    }
+    
+    @Override
+    public void validate(AuthContext context) throws AuthenticationException {
+        if (!context.hasCredential("clientId") || 
+            !context.hasCredential("clientSecret") ||
+            !context.hasCredential("tokenUrl")) {
+            throw new AuthenticationException(
+                "OAuth2 requires 'clientId', 'clientSecret', and 'tokenUrl'");
+        }
+    }
+    
+    private synchronized String getAccessToken(AuthContext context) 
+            throws AuthenticationException {
+        
+        // Return cached token if still valid
+        if (cachedToken != null && tokenExpiry != null && 
+            Instant.now().isBefore(tokenExpiry.minusSeconds(60))) {
+            return cachedToken;
+        }
+        
+        // Fetch new token
+        try {
+            String clientId = context.getCredential("clientId");
+            String clientSecret = context.getCredential("clientSecret");
+            String tokenUrl = context.getCredential("tokenUrl");
+            String scope = context.getCredential("scope"); // Optional
+            
+            String credentials = clientId + ":" + clientSecret;
+            String encoded = Base64.getEncoder().encodeToString(credentials.getBytes());
+            
+            String body = "grant_type=client_credentials";
+            if (scope != null) {
+                body += "&scope=" + URLEncoder.encode(scope, StandardCharsets.UTF_8);
+            }
+            
+            HttpRequest tokenRequest = HttpRequest.newBuilder()
+                .uri(URI.create(tokenUrl))
+                .header("Authorization", "Basic " + encoded)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+            
+            HttpResponse<String> response = HTTP_CLIENT.send(
+                tokenRequest, HttpResponse.BodyHandlers.ofString());
+            
+            if (response.statusCode() != 200) {
+                throw new AuthenticationException(
+                    "OAuth2 token fetch failed: " + response.statusCode());
+            }
+            
+            JsonNode json = OBJECT_MAPPER.readTree(response.body());
+            cachedToken = json.get("access_token").asText();
+            int expiresIn = json.get("expires_in").asInt();
+            tokenExpiry = Instant.now().plusSeconds(expiresIn);
+            
+            return cachedToken;
+            
+        } catch (Exception e) {
+            throw new AuthenticationException("Failed to fetch OAuth2 token", e);
+        }
+    }
+}
+```
+
+#### 7. **Database Authentication Provider**
+
+```java
+package com.vajraedge.perftest.auth.providers;
+
+import com.vajraedge.perftest.auth.AuthContext;
+import com.vajraedge.perftest.auth.AuthProvider;
+import com.vajraedge.perftest.auth.AuthenticationException;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.util.Properties;
+
+/**
+ * Database authentication provider.
+ * Injects username/password into JDBC connection.
+ */
+public class DatabaseAuthProvider implements AuthProvider {
+    
+    @Override
+    public Connection apply(AuthContext context, Connection connection) 
+            throws AuthenticationException {
+        // Connection already established with credentials
+        return connection;
+    }
+    
+    @Override
+    public void validate(AuthContext context) throws AuthenticationException {
+        if (!context.hasCredential("username") || !context.hasCredential("password")) {
+            throw new AuthenticationException(
+                "Database auth requires 'username' and 'password'");
+        }
+    }
+    
+    /**
+     * Create authenticated database connection.
+     */
+    public static Connection createConnection(AuthContext context, String jdbcUrl) 
+            throws Exception {
+        
+        Properties props = new Properties();
+        props.setProperty("user", context.getCredential("username"));
+        props.setProperty("password", context.getCredential("password"));
+        
+        return DriverManager.getConnection(jdbcUrl, props);
+    }
+}
+```
+
+#### 8. **Credential Resolvers** (External Secret Management)
+
+```java
+package com.vajraedge.perftest.auth.resolver;
+
+import com.vajraedge.perftest.auth.AuthContext;
+
+/**
+ * Interface for resolving credentials from external sources.
+ */
+public interface CredentialResolver {
+    
+    /**
+     * Resolve credentials and populate AuthContext.
+     * 
+     * @param key The credential key/path
+     * @return Resolved credential value
+     */
+    String resolve(String key) throws CredentialResolutionException;
+}
+```
+
+```java
+package com.vajraedge.perftest.auth.resolver;
+
+/**
+ * Resolves credentials from environment variables.
+ */
+public class EnvVarResolver implements CredentialResolver {
+    
+    @Override
+    public String resolve(String key) throws CredentialResolutionException {
+        String value = System.getenv(key);
+        if (value == null) {
+            throw new CredentialResolutionException(
+                "Environment variable not found: " + key);
+        }
+        return value;
+    }
+}
+```
+
+```java
+package com.vajraedge.perftest.auth.resolver;
+
+import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
+import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
+import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
+
+/**
+ * Resolves credentials from AWS Secrets Manager.
+ */
+public class AwsSecretsManagerResolver implements CredentialResolver {
+    
+    private final SecretsManagerClient client;
+    
+    public AwsSecretsManagerResolver() {
+        this.client = SecretsManagerClient.builder().build();
+    }
+    
+    @Override
+    public String resolve(String secretId) throws CredentialResolutionException {
+        try {
+            GetSecretValueRequest request = GetSecretValueRequest.builder()
+                .secretId(secretId)
+                .build();
+            
+            GetSecretValueResponse response = client.getSecretValue(request);
+            return response.secretString();
+            
+        } catch (Exception e) {
+            throw new CredentialResolutionException(
+                "Failed to resolve AWS secret: " + secretId, e);
+        }
+    }
+}
+```
+
+### 🔧 Integration with Existing Tasks
+
+#### Enhanced HttpTask with Authentication
+
+```java
+package com.vajraedge.perftest.task;
+
+import com.vajraedge.perftest.auth.AuthContext;
+import com.vajraedge.perftest.auth.AuthProvider;
+import com.vajraedge.perftest.auth.providers.NoAuthProvider;
+import com.vajraedge.perftest.core.SimpleTaskResult;
+import com.vajraedge.perftest.core.Task;
+import com.vajraedge.perftest.core.TaskResult;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+
+/**
+ * HTTP task with optional authentication support.
+ */
+public class AuthenticatedHttpTask implements Task {
+    
+    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(10))
+        .build();
+    
+    private final String url;
+    private final AuthProvider authProvider;
+    private final AuthContext authContext;
+    
+    public AuthenticatedHttpTask(String url) {
+        this(url, new NoAuthProvider(), null);
+    }
+    
+    public AuthenticatedHttpTask(String url, AuthProvider authProvider, AuthContext authContext) {
+        this.url = url;
+        this.authProvider = authProvider;
+        this.authContext = authContext;
+        
+        // Validate auth configuration
+        if (authContext != null && authProvider != null) {
+            authProvider.validate(authContext);
+        }
+    }
+    
+    @Override
+    public TaskResult execute() throws Exception {
+        long startTime = System.nanoTime();
+        long taskId = Thread.currentThread().threadId();
+        
+        try {
+            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .GET()
+                .timeout(Duration.ofSeconds(30));
+            
+            HttpRequest request = requestBuilder.build();
+            
+            // Apply authentication if configured
+            if (authProvider != null && authContext != null) {
+                request = authProvider.apply(authContext, request);
+            }
+            
+            HttpResponse<String> response = HTTP_CLIENT.send(
+                request, HttpResponse.BodyHandlers.ofString());
+            
+            long latencyNanos = System.nanoTime() - startTime;
+            boolean success = response.statusCode() >= 200 && response.statusCode() < 300;
+            
+            if (success) {
+                return SimpleTaskResult.success(taskId, latencyNanos, response.body().length());
+            } else {
+                return SimpleTaskResult.failure(
+                    taskId, latencyNanos, "HTTP " + response.statusCode());
+            }
+            
+        } catch (Exception e) {
+            long latencyNanos = System.nanoTime() - startTime;
+            return SimpleTaskResult.failure(taskId, latencyNanos, e.getMessage());
+        }
+    }
+}
+```
+
+### 🎨 API Integration
+
+#### Updated TestConfigRequest with Auth
+
+```java
+@NotNull
+private String authType = "NONE"; // NONE, BASIC, BEARER, API_KEY, OAUTH2, MUTUAL_TLS
+
+// Credential references (NOT actual credentials!)
+private Map<String, String> credentialReferences = new HashMap<>();
+// Example:
+// {
+//   "username": "env:API_USERNAME",      // Read from env var
+//   "password": "aws:prod/api/password", // Read from AWS Secrets Manager
+//   "token": "vault:secret/api-token"    // Read from HashiCorp Vault
+// }
+```
+
+#### REST API Endpoint
+
+```java
+@RestController
+@RequestMapping("/api/tests")
+public class TestController {
+    
+    @PostMapping
+    public ResponseEntity<TestStatusResponse> startTest(
+            @RequestBody @Valid TestConfigRequest request) {
+        
+        // Resolve credentials at runtime (never store!)
+        AuthContext authContext = resolveCredentials(
+            request.getAuthType(), 
+            request.getCredentialReferences()
+        );
+        
+        // Pass to execution service (in-memory only)
+        String testId = testExecutionService.startTest(request, authContext);
+        
+        // AuthContext gets garbage collected after test starts
+        
+        return ResponseEntity.ok(new TestStatusResponse(testId, "RUNNING"));
+    }
+    
+    private AuthContext resolveCredentials(
+            String authType, 
+            Map<String, String> references) {
+        
+        AuthContext.Builder builder = AuthContext.builder(authType);
+        
+        for (Map.Entry<String, String> entry : references.entrySet()) {
+            String key = entry.getKey();
+            String reference = entry.getValue();
+            
+            String value = credentialResolver.resolve(reference);
+            builder.credential(key, value);
+        }
+        
+        return builder.build();
+    }
+}
+```
+
+### 🎨 UI Integration
+
+#### Dashboard Authentication Panel
+
+```javascript
+// Auth configuration in UI
+function buildAuthConfig() {
+    const authType = document.getElementById('authType').value;
+    
+    const authConfig = {
+        authType: authType,
+        credentialReferences: {}
+    };
+    
+    switch(authType) {
+        case 'BASIC':
+            authConfig.credentialReferences = {
+                username: document.getElementById('usernameRef').value, // e.g., "env:API_USER"
+                password: document.getElementById('passwordRef').value  // e.g., "vault:secret/api"
+            };
+            break;
+        case 'BEARER':
+            authConfig.credentialReferences = {
+                token: document.getElementById('tokenRef').value // e.g., "env:API_TOKEN"
+            };
+            break;
+        case 'API_KEY':
+            authConfig.credentialReferences = {
+                apiKey: document.getElementById('apiKeyRef').value,
+                headerName: document.getElementById('headerName').value
+            };
+            break;
+        case 'OAUTH2':
+            authConfig.credentialReferences = {
+                clientId: document.getElementById('clientIdRef').value,
+                clientSecret: document.getElementById('clientSecretRef').value,
+                tokenUrl: document.getElementById('tokenUrl').value,
+                scope: document.getElementById('scope').value
+            };
+            break;
+    }
+    
+    return authConfig;
+}
+```
+
+```html
+<!-- Authentication Configuration Panel -->
+<div class="card mb-3">
+    <div class="card-header">
+        <h5>🔐 Authentication</h5>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <label for="authType" class="form-label">Authentication Type</label>
+            <select class="form-select" id="authType" onchange="updateAuthFields()">
+                <option value="NONE">None</option>
+                <option value="BASIC">HTTP Basic Auth</option>
+                <option value="BEARER">Bearer Token (OAuth2/JWT)</option>
+                <option value="API_KEY">API Key</option>
+                <option value="OAUTH2">OAuth2 Client Credentials</option>
+                <option value="MUTUAL_TLS">Mutual TLS</option>
+            </select>
+        </div>
+        
+        <!-- Basic Auth Fields -->
+        <div id="basicAuthFields" class="d-none">
+            <div class="mb-3">
+                <label class="form-label">Username Reference</label>
+                <input type="text" class="form-control" id="usernameRef" 
+                       placeholder="env:API_USERNAME or aws:prod/username">
+                <div class="form-text">
+                    Format: env:VAR_NAME | aws:secret/path | vault:secret/path
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Password Reference</label>
+                <input type="text" class="form-control" id="passwordRef" 
+                       placeholder="env:API_PASSWORD or aws:prod/password">
+            </div>
+        </div>
+        
+        <!-- Bearer Token Fields -->
+        <div id="bearerAuthFields" class="d-none">
+            <div class="mb-3">
+                <label class="form-label">Token Reference</label>
+                <input type="text" class="form-control" id="tokenRef" 
+                       placeholder="env:API_TOKEN or aws:prod/api-token">
+            </div>
+        </div>
+        
+        <!-- API Key Fields -->
+        <div id="apiKeyAuthFields" class="d-none">
+            <div class="mb-3">
+                <label class="form-label">API Key Reference</label>
+                <input type="text" class="form-control" id="apiKeyRef" 
+                       placeholder="env:API_KEY">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Header Name</label>
+                <input type="text" class="form-control" id="headerName" 
+                       placeholder="X-API-Key" value="X-API-Key">
+            </div>
+        </div>
+        
+        <!-- OAuth2 Fields -->
+        <div id="oauth2AuthFields" class="d-none">
+            <div class="mb-3">
+                <label class="form-label">Client ID Reference</label>
+                <input type="text" class="form-control" id="clientIdRef" 
+                       placeholder="env:OAUTH_CLIENT_ID">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Client Secret Reference</label>
+                <input type="text" class="form-control" id="clientSecretRef" 
+                       placeholder="env:OAUTH_CLIENT_SECRET">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Token URL</label>
+                <input type="text" class="form-control" id="tokenUrl" 
+                       placeholder="https://auth.example.com/oauth/token">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Scope (Optional)</label>
+                <input type="text" class="form-control" id="scope" 
+                       placeholder="read write">
+            </div>
+        </div>
+        
+        <div class="alert alert-info mb-0">
+            <small>
+                <strong>💡 Security Best Practice:</strong><br>
+                VajraEdge never stores credentials. Use references to external sources:
+                <ul class="mb-0 mt-1">
+                    <li><code>env:VAR_NAME</code> - Environment variable</li>
+                    <li><code>aws:secret/path</code> - AWS Secrets Manager</li>
+                    <li><code>vault:secret/path</code> - HashiCorp Vault</li>
+                </ul>
+            </small>
+        </div>
+    </div>
+</div>
+```
+
+### ⏱️ Effort Estimation
+
+| Component | Hours | Priority |
+|-----------|-------|----------|
+| AuthProvider interface & base classes | 4h | P0 |
+| HTTP auth providers (Basic, Bearer, API Key) | 6h | P0 |
+| OAuth2 provider with token caching | 6h | P1 |
+| Database auth provider | 4h | P1 |
+| Credential resolvers (Env, AWS, Vault) | 8h | P1 |
+| Integration with HttpTask | 3h | P0 |
+| DTO/API changes | 3h | P0 |
+| UI authentication panel | 6h | P1 |
+| Testing (unit + integration) | 8h | P0 |
+| Documentation | 4h | P1 |
+| **Total** | **52 hours** | **~6.5 days** |
+
+### 🎯 Security Principles
+
+#### 1. **Zero Storage**
+```java
+// ❌ NEVER do this
+class VajraEdge {
+    private Map<String, String> storedCredentials; // FORBIDDEN!
+}
+
+// ✅ ALWAYS do this
+public void startTest(TestConfig config, AuthContext authContext) {
+    // Use authContext
+    Task task = createAuthenticatedTask(authContext);
+    
+    // authContext will be garbage collected after this method
+    // No persistence!
+}
+```
+
+#### 2. **No Logging of Credentials**
+```java
+// ❌ NEVER do this
+logger.info("Using credentials: {}", authContext); // Dangerous!
+
+// ✅ ALWAYS do this
+logger.info("Using auth type: {}", authContext.getAuthType()); // Safe
+authContext.toString(); // Returns <REDACTED>
+```
+
+#### 3. **Short-Lived In-Memory Only**
+```java
+// AuthContext lifecycle:
+// 1. Created during API request
+// 2. Passed to Task execution
+// 3. Used during test initialization
+// 4. Garbage collected after test starts
+// 5. NEVER written to disk/database
+```
+
+#### 4. **Credential References, Not Values**
+```json
+{
+  "authType": "BASIC",
+  "credentialReferences": {
+    "username": "env:API_USER",
+    "password": "aws:prod/api/password"
+  }
+}
+```
+
+### ✅ Success Metrics
+
+- ✅ Support 5+ authentication types (Basic, Bearer, API Key, OAuth2, mTLS)
+- ✅ Zero credential persistence (verified by code review)
+- ✅ Support 3+ credential sources (Env, AWS, Vault)
+- ✅ 100% test coverage on auth providers
+- ✅ Security audit passes
+- ✅ Clear documentation on secure credential management
+
+### 🔗 Integration with Other Items
+
+#### With Item 7 (Pre-Flight Validation)
+```java
+public class AuthValidationCheck implements ValidationCheck {
+    
+    @Override
+    public CheckResult execute(ValidationContext context) {
+        // Validate auth credentials are resolvable
+        AuthContext authContext = context.getAuthContext();
+        
+        try {
+            authProvider.validate(authContext);
+            // Try a test request with auth
+            makeTestRequest(authContext);
+            return CheckResult.pass("Authentication validated");
+        } catch (Exception e) {
+            return CheckResult.fail("Authentication failed: " + e.getMessage());
+        }
+    }
+}
+```
+
+#### With Item 8 (SDK/Plugin)
+```java
+@VajraTask(
+    name = "Authenticated HTTP",
+    description = "HTTP task with OAuth2 authentication"
+)
+public class MyAuthenticatedTask implements Task {
+    
+    private final AuthProvider authProvider;
+    private final AuthContext authContext;
+    
+    @Override
+    public TaskResult execute() {
+        // Use injected auth
+        HttpRequest request = buildRequest();
+        request = authProvider.apply(authContext, request);
+        // Execute...
+    }
+}
+```
+
+---
+
 ## Success Metrics
 
 ### Item 7: Validation
@@ -1416,20 +2310,53 @@ public class WorkerServiceImpl extends WorkerServiceGrpc.WorkerServiceImplBase {
 - ✅ <1% metric accuracy variance
 - ✅ <30s worker failure recovery
 
+### Item 10: Authentication (NEW)
+- ✅ Support 5+ authentication types
+- ✅ Zero credential storage (100% in-memory)
+- ✅ Support 3+ credential sources
+- ✅ Security audit passes
+- ✅ Clear documentation
+
+---
+
+## Revised Timeline & Effort
+
+| Item | Effort | Priority | Sequence |
+|------|--------|----------|----------|
+| **Item 7**: Pre-flight validation | 20h (~2.5 days) | **P0** | **1st** |
+| **Item 10**: Authentication support | 52h (~6.5 days) | **P0** | **2nd** |
+| **Item 8**: SDK/Plugin architecture | 34h (~4.2 days) | **P1** | **3rd** |
+| **Item 9**: Distributed testing | 69h (~8.6 days) | **P2** | **4th** |
+| **Total** | **175 hours** | **~22 days** | - |
+
+### Recommended Implementation Order
+
+**Phase 1: Foundation (9 days)**
+- Item 7: Pre-flight validation (2.5 days)
+- Item 10: Authentication support (6.5 days)
+
+**Phase 2: Extensibility (4 days)**
+- Item 8: SDK/Plugin architecture (4 days)
+
+**Phase 3: Scale (9 days)**
+- Item 9: Distributed testing (9 days)
+
 ---
 
 ## Next Steps
 
-1. **Review this plan** with stakeholders
-2. **Prioritize items** based on business needs
+1. **Review authentication design** with security team
+2. **Validate credential resolver integrations** (AWS/Vault access)
 3. **Start with Item 7** (quickest win)
-4. **Parallel track Item 8** (enables ecosystem)
-5. **Plan Item 9** for future release (complex)
+4. **Implement Item 10** (critical for real-world use)
+5. **Parallel track Item 8** (enables ecosystem)
+6. **Plan Item 9** for future release (complex)
 
 ---
 
 **Questions for Discussion**:
-1. Should all 3 items be in same release?
-2. What's priority order?
-3. Are we OK with 15 days timeline?
-4. Any concerns with distributed architecture design?
+1. Should all 4 items be in same release?
+2. What's priority order? (Recommended: 7 → 10 → 8 → 9)
+3. Are we OK with 22 days timeline?
+4. Which credential sources to support first? (Env + AWS recommended)
+5. Any concerns with zero-storage authentication design?
