@@ -64,6 +64,37 @@ window.subscribeToMetrics = function subscribeToMetrics(testId) {
             const metrics = JSON.parse(message.body);
             console.log('Received metrics update:', metrics);
             
+            // Determine current test phase
+            let testPhase = 'RAMP_UP';
+            if (window.currentTest && window.currentTest.startTime) {
+                const elapsed = Math.floor((new Date() - window.currentTest.startTime) / 1000);
+                const config = window.currentTest.config;
+                
+                if (config) {
+                    const rampStrategy = config.rampStrategyType || 'STEP';
+                    const sustainDuration = config.sustainDurationSeconds || 0;
+                    let rampDuration = 0;
+                    
+                    // Calculate ramp duration based on strategy
+                    if (rampStrategy === 'LINEAR') {
+                        rampDuration = config.rampDurationSeconds || 60;
+                    } else {
+                        const startConcurrency = config.startingConcurrency || 10;
+                        const maxConcurrency = config.maxConcurrency || 100;
+                        const rampStep = config.rampStep || 10;
+                        const rampInterval = config.rampIntervalSeconds || 30;
+                        const usersToAdd = maxConcurrency - startConcurrency;
+                        const stepsNeeded = Math.ceil(usersToAdd / rampStep);
+                        rampDuration = stepsNeeded * rampInterval;
+                    }
+                    
+                    // Determine phase
+                    if (sustainDuration > 0 && elapsed >= rampDuration && elapsed < (rampDuration + sustainDuration)) {
+                        testPhase = 'SUSTAIN';
+                    }
+                }
+            }
+            
             if (typeof updateMetricsDisplay === 'function') {
                 updateMetricsDisplay(metrics);
             } else {
@@ -71,7 +102,7 @@ window.subscribeToMetrics = function subscribeToMetrics(testId) {
             }
             
             if (typeof updateCharts === 'function') {
-                updateCharts(metrics);
+                updateCharts(metrics, testPhase);
             } else {
                 console.error('updateCharts is not defined!');
             }

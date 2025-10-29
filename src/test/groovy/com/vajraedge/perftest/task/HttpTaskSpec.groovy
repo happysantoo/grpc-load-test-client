@@ -68,6 +68,7 @@ class HttpTaskSpec extends Specification {
 
         then: "latency should be recorded in nanoseconds"
         result.getLatencyNanos() > 0
-        result.getLatencyNanos() < 30_000_000_000L // Should complete within 30 seconds
+        // Allow up to 60 seconds for slow external service (httpbin.org can be unreliable)
+        result.getLatencyNanos() < 60_000_000_000L
     }
 }

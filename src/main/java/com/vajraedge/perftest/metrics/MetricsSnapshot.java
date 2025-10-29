@@ -17,6 +17,7 @@ public class MetricsSnapshot {
     private final double tps;
     private final double avgLatencyMs;
     private final double successRate;
+    private final double errorRate;
     private final PercentileStats percentiles;
     private final Map<String, Long> errorCounts;
     
@@ -32,6 +33,7 @@ public class MetricsSnapshot {
         this.tps = tps;
         this.avgLatencyMs = avgLatencyMs;
         this.successRate = successRate;
+        this.errorRate = totalTasks > 0 ? (failedTasks * 100.0 / totalTasks) : 0.0;
         this.percentiles = percentiles;
         this.errorCounts = errorCounts;
     }
@@ -45,14 +47,22 @@ public class MetricsSnapshot {
     public double getTps() { return tps; }
     public double getAvgLatencyMs() { return avgLatencyMs; }
     public double getSuccessRate() { return successRate; }
+    
+    /**
+     * Get the error rate as a percentage (0-100).
+     * 
+     * @return error rate percentage
+     */
+    public double getErrorRate() { return errorRate; }
+    
     public PercentileStats getPercentiles() { return percentiles; }
     public Map<String, Long> getErrorCounts() { return errorCounts; }
     
     @Override
     public String toString() {
         return String.format(
-                "Tasks: %d (%.1f%% success), TPS: %.1f, Avg Latency: %.2fms, P95: %.2fms, P99: %.2fms",
-                totalTasks, successRate, tps, avgLatencyMs,
+                "Tasks: %d (%.1f%% success, %.1f%% errors), TPS: %.1f, Avg Latency: %.2fms, P95: %.2fms, P99: %.2fms",
+                totalTasks, successRate, errorRate, tps, avgLatencyMs,
                 percentiles.getPercentile(0.95), percentiles.getPercentile(0.99)
         );
     }

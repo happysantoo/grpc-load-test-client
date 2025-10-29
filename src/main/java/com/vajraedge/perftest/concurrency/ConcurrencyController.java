@@ -131,4 +131,27 @@ public class ConcurrencyController {
     public int getMaxConcurrency() {
         return rampStrategy.getMaxConcurrency();
     }
+    
+    /**
+     * Calculate the ramp-up progress as a percentage (0-100).
+     * 
+     * @param elapsedSeconds seconds elapsed since test start
+     * @return ramp-up progress percentage
+     */
+    public double getRampUpProgress(long elapsedSeconds) {
+        int startingConcurrency = rampStrategy.getStartingConcurrency();
+        int maxConcurrency = rampStrategy.getMaxConcurrency();
+        int currentConcurrency = rampStrategy.getTargetConcurrency(elapsedSeconds);
+        
+        // Avoid division by zero if starting == max
+        if (maxConcurrency == startingConcurrency) {
+            return 100.0;
+        }
+        
+        double progress = ((double) (currentConcurrency - startingConcurrency) / 
+                          (maxConcurrency - startingConcurrency)) * 100.0;
+        
+        // Clamp to 0-100 range
+        return Math.max(0.0, Math.min(100.0, progress));
+    }
 }

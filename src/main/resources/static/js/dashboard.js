@@ -1,5 +1,5 @@
 // Main dashboard logic
-let currentTest = null;
+window.currentTest = null;
 let statusPollingInterval = null;
 let previousMetrics = null; // Track previous metrics for diagnostics
 
@@ -103,7 +103,7 @@ document.getElementById('testConfigForm').addEventListener('submit', async funct
         const result = await response.json();
         console.log('Test started:', result);
         
-        currentTest = {
+        window.currentTest = {
             testId: result.testId,
             config: config,
             startTime: new Date()
@@ -151,12 +151,12 @@ document.getElementById('testConfigForm').addEventListener('submit', async funct
 
 // Handle stop button
 document.getElementById('stopBtn').addEventListener('click', async function() {
-    if (!currentTest) {
+    if (!window.currentTest) {
         return;
     }
     
     try {
-        const response = await fetch('/api/tests/' + currentTest.testId, {
+        const response = await fetch('/api/tests/' + window.currentTest.testId, {
             method: 'DELETE'
         });
         
@@ -227,17 +227,23 @@ window.updateMetricsDisplay = function updateMetricsDisplay(metrics) {
         console.warn('No latency percentiles in metrics');
     }
     
-    // Update elapsed time
+    // Update elapsed time and determine phase
+    let testPhase = 'RAMP_UP';
     if (currentTest) {
         const elapsed = Math.floor((new Date() - currentTest.startTime) / 1000);
         document.getElementById('elapsedTime').textContent = formatDuration(elapsed);
         
         // Calculate and update test phase
-        updateTestPhase(elapsed, currentTest.config);
+        testPhase = updateTestPhase(elapsed, currentTest.config);
     }
     
     // Update diagnostics panel
     updateDiagnostics(metrics);
+    
+    // Update charts with phase information
+    if (typeof updateCharts === 'function') {
+        updateCharts(metrics, testPhase);
+    }
     
     // Store for next calculation
     previousMetrics = metrics;
@@ -295,18 +301,90 @@ function updateDiagnostics(metrics) {
         
         // Bottleneck Indicator
         const bottleneckEl = document.getElementById('diagBottleneck');
-        if (queueDepth > virtualUsers * 0.5) {
-            // Significant queue buildup = VajraEdge bottleneck
+        const avgLatency = metrics.avgLatencyMs || 0;
+        
+        console.log('Bottleneck analysis:', {
+            queueDepth,
+            virtualUsers,
+            tps,
+            avgLatency,
+            hasPrevious: !!previousMetrics,
+            prevTps: previousMetrics?.currentTps,
+            prevUsers: previousMetrics?.activeTasks
+        });
+        
+        // Priority 1: Check for VajraEdge bottleneck (queue buildup)
+        if (queueDepth > virtualUsers * 2 && queueDepth > 50) {
+            // Severe queue buildup = VajraEdge bottleneck
             bottleneckEl.textContent = 'VajraEdge (Queue Buildup)';
             bottleneckEl.className = 'badge bg-danger';
-        } else if (virtualUsers > 100 && previousMetrics && Math.abs(tps - (previousMetrics.currentTps || 0)) < 100) {
-            // TPS plateaued with increasing users = Service bottleneck
-            bottleneckEl.textContent = 'HTTP Service (Saturated)';
+        } else if (queueDepth > virtualUsers && queueDepth > 20) {
+            // Moderate queue buildup
+            bottleneckEl.textContent = 'VajraEdge (Growing Queue)';
             bottleneckEl.className = 'badge bg-warning';
-        } else if (queueDepth === 0 && virtualUsers > 0) {
-            // No queue, tasks flowing = Healthy
-            bottleneckEl.textContent = 'None (Healthy)';
-            bottleneckEl.className = 'badge bg-success';
+        } 
+        // Priority 2: Check for service saturation (needs sufficient data)
+        else if (previousMetrics && virtualUsers >= 10) {
+            const prevTps = previousMetrics.currentTps || 0;
+            const prevUsers = previousMetrics.activeTasks || 0;
+            const prevLatency = previousMetrics.avgLatencyMs || 0;
+            
+            const userIncrease = virtualUsers - prevUsers;
+            const tpsIncrease = tps - prevTps;
+            const latencyIncrease = avgLatency - prevLatency;
+            
+            // Calculate TPS per user to detect saturation
+            const currentTpsPerUser = virtualUsers > 0 ? tps / virtualUsers : 0;
+            const prevTpsPerUser = prevUsers > 0 ? prevTps / prevUsers : 0;
+            const tpsPerUserDrop = prevTpsPerUser > 0 ? (prevTpsPerUser - currentTpsPerUser) / prevTpsPerUser : 0;
+            
+            console.log('Service saturation check:', { 
+                userIncrease, 
+                tpsIncrease, 
+                latencyIncrease,
+                currentTpsPerUser: currentTpsPerUser.toFixed(2),
+                prevTpsPerUser: prevTpsPerUser.toFixed(2),
+                tpsPerUserDrop: (tpsPerUserDrop * 100).toFixed(1) + '%'
+            });
+            
+            // Service is saturated if:
+            // 1. Users increased significantly but TPS didn't keep pace
+            // 2. TPS per user is dropping (efficiency going down)
+            // 3. Latency is increasing
+            if (userIncrease >= 3) {
+                if (tpsIncrease < userIncrease * 0.5 || tpsPerUserDrop > 0.15) {
+                    // TPS not keeping up with user growth = Service saturated
+                    bottleneckEl.textContent = 'HTTP Service (Saturated)';
+                    bottleneckEl.className = 'badge bg-warning';
+                } else if (latencyIncrease > 100 && avgLatency > 500) {
+                    // Latency climbing = Service under stress
+                    bottleneckEl.textContent = 'HTTP Service (High Latency)';
+                    bottleneckEl.className = 'badge bg-warning';
+                } else if (avgLatency < 300 && queueDepth < 10) {
+                    // Good latency, no queue = Healthy
+                    bottleneckEl.textContent = 'None (Healthy)';
+                    bottleneckEl.className = 'badge bg-success';
+                } else {
+                    bottleneckEl.textContent = 'Analyzing...';
+                    bottleneckEl.className = 'badge bg-secondary';
+                }
+            } else if (avgLatency > 1000) {
+                // High latency even with stable users = Service bottleneck
+                bottleneckEl.textContent = 'HTTP Service (High Latency)';
+                bottleneckEl.className = 'badge bg-warning';
+            } else if (queueDepth < 5 && avgLatency < 300) {
+                // No queue, good latency = Healthy
+                bottleneckEl.textContent = 'None (Healthy)';
+                bottleneckEl.className = 'badge bg-success';
+            } else {
+                bottleneckEl.textContent = 'Analyzing...';
+                bottleneckEl.className = 'badge bg-secondary';
+            }
+        } 
+        // Priority 3: Initial state (not enough data yet)
+        else if (virtualUsers < 10 || !previousMetrics) {
+            bottleneckEl.textContent = 'Warming Up...';
+            bottleneckEl.className = 'badge bg-info';
         } else {
             bottleneckEl.textContent = 'Analyzing...';
             bottleneckEl.className = 'badge bg-secondary';
@@ -321,7 +399,7 @@ function updateDiagnostics(metrics) {
 function updateTestPhase(elapsedSeconds, config) {
     try {
         const phaseEl = document.getElementById('testPhase');
-        if (!phaseEl || !config) return;
+        if (!phaseEl || !config) return 'RAMP_UP';
         
         const rampStrategy = config.rampStrategyType || 'STEP';
         const sustainDuration = config.sustainDurationSeconds || 0;
@@ -343,22 +421,30 @@ function updateTestPhase(elapsedSeconds, config) {
         }
         
         // Determine current phase
+        let currentPhase = 'RAMP_UP';
+        
         if (elapsedSeconds < rampDuration) {
             const progress = ((elapsedSeconds / rampDuration) * 100).toFixed(0);
             phaseEl.textContent = `Ramp-Up (${progress}%)`;
             phaseEl.className = 'badge bg-primary';
+            currentPhase = 'RAMP_UP';
         } else if (sustainDuration > 0 && elapsedSeconds < (rampDuration + sustainDuration)) {
             const sustainElapsed = elapsedSeconds - rampDuration;
             const remainingSustain = sustainDuration - sustainElapsed;
             phaseEl.textContent = `Sustain (${remainingSustain}s left)`;
             phaseEl.className = 'badge bg-success';
+            currentPhase = 'SUSTAIN';
         } else {
             phaseEl.textContent = 'Completed';
             phaseEl.className = 'badge bg-secondary';
+            currentPhase = 'COMPLETED';
         }
+        
+        return currentPhase;
         
     } catch (error) {
         console.error('Error updating test phase:', error);
+        return 'RAMP_UP';
     }
 }
 
@@ -428,7 +514,7 @@ async function loadActiveTests() {
                     <small class="text-muted">${status}</small>
                 `;
                 item.addEventListener('click', () => {
-                    currentTest = { testId: testId };
+                    window.currentTest = { testId: testId };
                     subscribeToMetrics(testId);
                     document.getElementById('noTestMessage').classList.add('d-none');
                     document.getElementById('metricsPanel').classList.remove('d-none');

@@ -30,6 +30,8 @@ VajraEdge is a modern, high-performance load testing framework built with Java 2
 - Graceful degradation and circuit breaker patterns where appropriate
 - Security best practices (input validation, sanitization)
 - Always make sure to run gralde build and test to verify correctness before committing changes
+- prefer simple repeatable patterns over complex ones
+- No flaky timing based testing code logic.
 
 ## Code Conventions
 
