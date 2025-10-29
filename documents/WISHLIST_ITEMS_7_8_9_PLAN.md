@@ -1801,6 +1801,418 @@ public class DatabaseAuthProvider implements AuthProvider {
 }
 ```
 
+#### 8. **Kerberos Authentication Provider**
+
+```java
+package com.vajraedge.perftest.auth.providers;
+
+import com.vajraedge.perftest.auth.AuthContext;
+import com.vajraedge.perftest.auth.AuthProvider;
+import com.vajraedge.perftest.auth.AuthenticationException;
+
+import javax.security.auth.Subject;
+import javax.security.auth.login.AppConfigurationEntry;
+import javax.security.auth.login.Configuration;
+import javax.security.auth.login.LoginContext;
+import javax.security.auth.login.LoginException;
+import java.security.PrivilegedAction;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Kerberos authentication provider.
+ * Supports both keytab-based and credential cache authentication.
+ * 
+ * Thread-safe implementation with Subject caching.
+ */
+public class KerberosAuthProvider implements AuthProvider {
+    
+    private Subject cachedSubject;
+    private long subjectExpiryTime;
+    private static final long SUBJECT_CACHE_DURATION_MS = 3600_000; // 1 hour
+    
+    @Override
+    public <T> T apply(AuthContext context, T target) throws AuthenticationException {
+        Subject subject = getAuthenticatedSubject(context);
+        
+        // Execute target operation within Kerberos context
+        return Subject.doAs(subject, (PrivilegedAction<T>) () -> target);
+    }
+    
+    @Override
+    public void validate(AuthContext context) throws AuthenticationException {
+        String authMethod = context.getCredential("kerberosAuthMethod");
+        
+        if (authMethod == null) {
+            throw new AuthenticationException(
+                "Kerberos auth requires 'kerberosAuthMethod' (KEYTAB or CREDENTIAL_CACHE)");
+        }
+        
+        switch (authMethod.toUpperCase()) {
+            case "KEYTAB":
+                if (!context.hasCredential("principal") || !context.hasCredential("keytabPath")) {
+                    throw new AuthenticationException(
+                        "Keytab auth requires 'principal' and 'keytabPath' credentials");
+                }
+                break;
+            case "CREDENTIAL_CACHE":
+                if (!context.hasCredential("principal")) {
+                    throw new AuthenticationException(
+                        "Credential cache auth requires 'principal' credential");
+                }
+                break;
+            default:
+                throw new AuthenticationException(
+                    "Invalid kerberosAuthMethod: " + authMethod + 
+                    " (must be KEYTAB or CREDENTIAL_CACHE)");
+        }
+    }
+    
+    /**
+     * Get authenticated Kerberos Subject.
+     * Caches the Subject and reuses it until expiry.
+     */
+    private synchronized Subject getAuthenticatedSubject(AuthContext context) 
+            throws AuthenticationException {
+        
+        // Return cached subject if still valid
+        if (cachedSubject != null && System.currentTimeMillis() < subjectExpiryTime) {
+            return cachedSubject;
+        }
+        
+        String authMethod = context.getCredential("kerberosAuthMethod");
+        
+        try {
+            Subject subject = new Subject();
+            Configuration config = createKerberosConfiguration(context);
+            
+            LoginContext loginContext = new LoginContext("VajraEdge", subject, null, config);
+            loginContext.login();
+            
+            cachedSubject = loginContext.getSubject();
+            subjectExpiryTime = System.currentTimeMillis() + SUBJECT_CACHE_DURATION_MS;
+            
+            return cachedSubject;
+            
+        } catch (LoginException e) {
+            throw new AuthenticationException(
+                "Kerberos authentication failed using " + authMethod + ": " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Create Kerberos JAAS configuration dynamically.
+     */
+    private Configuration createKerberosConfiguration(AuthContext context) {
+        return new Configuration() {
+            @Override
+            public AppConfigurationEntry[] getAppConfigurationEntry(String name) {
+                Map<String, String> options = new HashMap<>();
+                
+                String authMethod = context.getCredential("kerberosAuthMethod");
+                
+                if ("KEYTAB".equalsIgnoreCase(authMethod)) {
+                    // Keytab-based authentication
+                    options.put("useKeyTab", "true");
+                    options.put("keyTab", context.getCredential("keytabPath"));
+                    options.put("principal", context.getCredential("principal"));
+                    options.put("storeKey", "true");
+                    options.put("doNotPrompt", "true");
+                    options.put("refreshKrb5Config", "true");
+                    
+                } else {
+                    // Credential cache authentication (kinit)
+                    options.put("useTicketCache", "true");
+                    options.put("principal", context.getCredential("principal"));
+                    options.put("doNotPrompt", "true");
+                    options.put("refreshKrb5Config", "true");
+                    
+                    // Optional: specify ticket cache location
+                    String ticketCache = context.getCredential("ticketCachePath");
+                    if (ticketCache != null) {
+                        options.put("ticketCache", ticketCache);
+                    }
+                }
+                
+                options.put("debug", context.getCredential("debug") != null ? 
+                    context.getCredential("debug") : "false");
+                
+                return new AppConfigurationEntry[]{
+                    new AppConfigurationEntry(
+                        "com.sun.security.auth.module.Krb5LoginModule",
+                        AppConfigurationEntry.LoginModuleControlFlag.REQUIRED,
+                        options
+                    )
+                };
+            }
+        };
+    }
+    
+    /**
+     * Explicitly invalidate cached Subject (e.g., on logout).
+     */
+    public synchronized void invalidateSubject() {
+        cachedSubject = null;
+        subjectExpiryTime = 0;
+    }
+}
+```
+
+#### 9. **Kerberos HTTP Provider** (for HTTP services with SPNEGO)
+
+```java
+package com.vajraedge.perftest.auth.providers;
+
+import com.vajraedge.perftest.auth.AuthContext;
+import com.vajraedge.perftest.auth.AuthProvider;
+import com.vajraedge.perftest.auth.AuthenticationException;
+
+import javax.security.auth.Subject;
+import java.net.http.HttpRequest;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.Base64;
+
+import org.ietf.jgss.GSSContext;
+import org.ietf.jgss.GSSManager;
+import org.ietf.jgss.GSSName;
+import org.ietf.jgss.Oid;
+
+/**
+ * Kerberos authentication for HTTP services using SPNEGO.
+ * Generates SPNEGO token and adds Negotiate header.
+ */
+public class KerberosHttpProvider implements AuthProvider {
+    
+    private final KerberosAuthProvider kerberosProvider;
+    
+    public KerberosHttpProvider() {
+        this.kerberosProvider = new KerberosAuthProvider();
+    }
+    
+    @Override
+    public HttpRequest apply(AuthContext context, HttpRequest request) 
+            throws AuthenticationException {
+        
+        Subject subject = kerberosProvider.getAuthenticatedSubject(context);
+        String servicePrincipal = context.getCredential("servicePrincipal");
+        
+        try {
+            // Generate SPNEGO token within Kerberos context
+            String spnegoToken = Subject.doAs(subject, 
+                (PrivilegedExceptionAction<String>) () -> generateSpnegoToken(servicePrincipal));
+            
+            // Add Negotiate header
+            return HttpRequest.newBuilder(request, (name, value) -> true)
+                .header("Authorization", "Negotiate " + spnegoToken)
+                .build();
+                
+        } catch (PrivilegedActionException e) {
+            throw new AuthenticationException(
+                "Failed to generate SPNEGO token", e.getException());
+        }
+    }
+    
+    @Override
+    public void validate(AuthContext context) throws AuthenticationException {
+        // Delegate to KerberosAuthProvider for base validation
+        kerberosProvider.validate(context);
+        
+        // Additional validation for HTTP-specific requirements
+        if (!context.hasCredential("servicePrincipal")) {
+            throw new AuthenticationException(
+                "Kerberos HTTP auth requires 'servicePrincipal' (e.g., HTTP/example.com@REALM)");
+        }
+    }
+    
+    /**
+     * Generate SPNEGO token for HTTP authentication.
+     */
+    private String generateSpnegoToken(String servicePrincipal) throws Exception {
+        GSSManager manager = GSSManager.getInstance();
+        
+        // Create service principal name
+        GSSName serverName = manager.createName(
+            servicePrincipal, GSSName.NT_HOSTBASED_SERVICE);
+        
+        // SPNEGO OID
+        Oid spnegoOid = new Oid("1.3.6.1.5.5.2");
+        
+        GSSContext gssContext = manager.createContext(
+            serverName, spnegoOid, null, GSSContext.DEFAULT_LIFETIME);
+        
+        gssContext.requestMutualAuth(true);
+        gssContext.requestCredDeleg(false);
+        
+        // Generate initial token
+        byte[] token = gssContext.initSecContext(new byte[0], 0, 0);
+        
+        // Encode as Base64
+        return Base64.getEncoder().encodeToString(token);
+    }
+}
+```
+
+#### 10. **Kerberos Database Provider** (for JDBC with Kerberos)
+
+```java
+package com.vajraedge.perftest.auth.providers;
+
+import com.vajraedge.perftest.auth.AuthContext;
+import com.vajraedge.perftest.auth.AuthProvider;
+import com.vajraedge.perftest.auth.AuthenticationException;
+
+import javax.security.auth.Subject;
+import java.security.PrivilegedExceptionAction;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.util.Properties;
+
+/**
+ * Kerberos authentication for databases (e.g., Oracle, PostgreSQL, Hive).
+ * Establishes JDBC connection using Kerberos credentials.
+ */
+public class KerberosDatabaseProvider implements AuthProvider {
+    
+    private final KerberosAuthProvider kerberosProvider;
+    
+    public KerberosDatabaseProvider() {
+        this.kerberosProvider = new KerberosAuthProvider();
+    }
+    
+    @Override
+    public Connection apply(AuthContext context, Connection connection) 
+            throws AuthenticationException {
+        // Connection already established with Kerberos
+        return connection;
+    }
+    
+    @Override
+    public void validate(AuthContext context) throws AuthenticationException {
+        kerberosProvider.validate(context);
+        
+        if (!context.hasCredential("jdbcUrl")) {
+            throw new AuthenticationException(
+                "Kerberos DB auth requires 'jdbcUrl' credential");
+        }
+    }
+    
+    /**
+     * Create Kerberos-authenticated database connection.
+     */
+    public Connection createConnection(AuthContext context) throws AuthenticationException {
+        Subject subject = kerberosProvider.getAuthenticatedSubject(context);
+        String jdbcUrl = context.getCredential("jdbcUrl");
+        
+        try {
+            return Subject.doAs(subject, 
+                (PrivilegedExceptionAction<Connection>) () -> {
+                    Properties props = new Properties();
+                    
+                    // Database-specific Kerberos properties
+                    String dbType = context.getCredential("databaseType");
+                    if (dbType != null) {
+                        switch (dbType.toUpperCase()) {
+                            case "ORACLE":
+                                props.setProperty("oracle.net.authentication_services", "KERBEROS5");
+                                break;
+                            case "POSTGRESQL":
+                                props.setProperty("gssencmode", "require");
+                                break;
+                            case "HIVE":
+                                props.setProperty("auth", "kerberos");
+                                props.setProperty("kerberosAuthType", "fromSubject");
+                                break;
+                        }
+                    }
+                    
+                    return DriverManager.getConnection(jdbcUrl, props);
+                });
+                
+        } catch (Exception e) {
+            throw new AuthenticationException(
+                "Failed to create Kerberos-authenticated DB connection", e);
+        }
+    }
+}
+```
+
+#### 11. **Kerberos Kafka Provider**
+
+```java
+package com.vajraedge.perftest.auth.providers;
+
+import com.vajraedge.perftest.auth.AuthContext;
+import com.vajraedge.perftest.auth.AuthProvider;
+import com.vajraedge.perftest.auth.AuthenticationException;
+
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.SaslConfigs;
+
+import java.util.Properties;
+
+/**
+ * Kerberos authentication for Kafka clients (SASL/GSSAPI).
+ */
+public class KerberosKafkaProvider implements AuthProvider {
+    
+    private final KerberosAuthProvider kerberosProvider;
+    
+    public KerberosKafkaProvider() {
+        this.kerberosProvider = new KerberosAuthProvider();
+    }
+    
+    @Override
+    public Properties apply(AuthContext context, Properties kafkaProps) 
+            throws AuthenticationException {
+        
+        // Ensure Kerberos Subject is authenticated
+        kerberosProvider.getAuthenticatedSubject(context);
+        
+        // Configure Kafka for SASL/GSSAPI
+        kafkaProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SASL_PLAINTEXT");
+        kafkaProps.put(SaslConfigs.SASL_MECHANISM, "GSSAPI");
+        
+        String serviceName = context.getCredential("kafkaServiceName");
+        if (serviceName != null) {
+            kafkaProps.put(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, serviceName);
+        }
+        
+        // JAAS configuration
+        String principal = context.getCredential("principal");
+        String authMethod = context.getCredential("kerberosAuthMethod");
+        
+        if ("KEYTAB".equalsIgnoreCase(authMethod)) {
+            String keytabPath = context.getCredential("keytabPath");
+            String jaasConfig = String.format(
+                "com.sun.security.auth.module.Krb5LoginModule required " +
+                "useKeyTab=true " +
+                "storeKey=true " +
+                "keyTab=\"%s\" " +
+                "principal=\"%s\";",
+                keytabPath, principal
+            );
+            kafkaProps.put(SaslConfigs.SASL_JAAS_CONFIG, jaasConfig);
+        } else {
+            String jaasConfig = String.format(
+                "com.sun.security.auth.module.Krb5LoginModule required " +
+                "useTicketCache=true " +
+                "principal=\"%s\";",
+                principal
+            );
+            kafkaProps.put(SaslConfigs.SASL_JAAS_CONFIG, jaasConfig);
+        }
+        
+        return kafkaProps;
+    }
+    
+    @Override
+    public void validate(AuthContext context) throws AuthenticationException {
+        kerberosProvider.validate(context);
+    }
+}
+```
+
 #### 8. **Credential Resolvers** (External Secret Management)
 
 ```java
@@ -2068,6 +2480,29 @@ function buildAuthConfig() {
                 scope: document.getElementById('scope').value
             };
             break;
+        case 'KERBEROS':
+            authConfig.credentialReferences = {
+                principal: document.getElementById('principal').value,
+                kerberosAuthMethod: document.getElementById('kerberosAuthMethod').value
+            };
+            
+            if (document.getElementById('kerberosAuthMethod').value === 'KEYTAB') {
+                authConfig.credentialReferences.keytabPath = 
+                    document.getElementById('keytabPathRef').value; // e.g., "env:KEYTAB_PATH"
+            } else {
+                // Optional ticket cache path
+                const ticketCache = document.getElementById('ticketCacheRef').value;
+                if (ticketCache) {
+                    authConfig.credentialReferences.ticketCachePath = ticketCache;
+                }
+            }
+            
+            // For HTTP services with SPNEGO
+            const servicePrincipal = document.getElementById('servicePrincipal').value;
+            if (servicePrincipal) {
+                authConfig.credentialReferences.servicePrincipal = servicePrincipal;
+            }
+            break;
     }
     
     return authConfig;
@@ -2089,6 +2524,7 @@ function buildAuthConfig() {
                 <option value="BEARER">Bearer Token (OAuth2/JWT)</option>
                 <option value="API_KEY">API Key</option>
                 <option value="OAUTH2">OAuth2 Client Credentials</option>
+                <option value="KERBEROS">Kerberos (Keytab/Credential Cache)</option>
                 <option value="MUTUAL_TLS">Mutual TLS</option>
             </select>
         </div>
@@ -2157,6 +2593,61 @@ function buildAuthConfig() {
             </div>
         </div>
         
+        <!-- Kerberos Fields -->
+        <div id="kerberosAuthFields" class="d-none">
+            <div class="mb-3">
+                <label class="form-label">Kerberos Principal</label>
+                <input type="text" class="form-control" id="principal" 
+                       placeholder="user@REALM.COM">
+                <div class="form-text">
+                    Your Kerberos principal (e.g., user@EXAMPLE.COM)
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Authentication Method</label>
+                <select class="form-select" id="kerberosAuthMethod" onchange="updateKerberosFields()">
+                    <option value="KEYTAB">Keytab File</option>
+                    <option value="CREDENTIAL_CACHE">Credential Cache (kinit)</option>
+                </select>
+            </div>
+            <div id="keytabFields">
+                <div class="mb-3">
+                    <label class="form-label">Keytab Path Reference</label>
+                    <input type="text" class="form-control" id="keytabPathRef" 
+                           placeholder="env:KEYTAB_PATH or /path/to/user.keytab">
+                    <div class="form-text">
+                        Path to keytab file. Can be env reference or absolute path.
+                    </div>
+                </div>
+            </div>
+            <div id="ticketCacheFields" class="d-none">
+                <div class="mb-3">
+                    <label class="form-label">Ticket Cache Path (Optional)</label>
+                    <input type="text" class="form-control" id="ticketCacheRef" 
+                           placeholder="/tmp/krb5cc_1000">
+                    <div class="form-text">
+                        Leave empty to use default ticket cache location
+                    </div>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Service Principal (For HTTP/Kafka)</label>
+                <input type="text" class="form-control" id="servicePrincipal" 
+                       placeholder="HTTP/example.com@REALM.COM">
+                <div class="form-text">
+                    Required for HTTP (SPNEGO) or Kafka. Format: SERVICE/hostname@REALM
+                </div>
+            </div>
+            <div class="alert alert-info">
+                <small>
+                    <strong>💡 Kerberos Setup:</strong><br>
+                    <strong>Keytab:</strong> Generate with <code>ktutil</code> or provided by admin<br>
+                    <strong>Credential Cache:</strong> Run <code>kinit user@REALM.COM</code> before testing<br>
+                    <strong>Config:</strong> Ensure <code>/etc/krb5.conf</code> is properly configured
+                </small>
+            </div>
+        </div>
+        
         <div class="alert alert-info mb-0">
             <small>
                 <strong>💡 Security Best Practice:</strong><br>
@@ -2166,10 +2657,19 @@ function buildAuthConfig() {
                     <li><code>aws:secret/path</code> - AWS Secrets Manager</li>
                     <li><code>vault:secret/path</code> - HashiCorp Vault</li>
                 </ul>
+                For Kerberos, keytab files and ticket caches are read at runtime only.
             </small>
         </div>
     </div>
 </div>
+
+<script>
+function updateKerberosFields() {
+    const method = document.getElementById('kerberosAuthMethod').value;
+    document.getElementById('keytabFields').classList.toggle('d-none', method !== 'KEYTAB');
+    document.getElementById('ticketCacheFields').classList.toggle('d-none', method !== 'CREDENTIAL_CACHE');
+}
+</script>
 ```
 
 ### ⏱️ Effort Estimation
@@ -2179,14 +2679,17 @@ function buildAuthConfig() {
 | AuthProvider interface & base classes | 4h | P0 |
 | HTTP auth providers (Basic, Bearer, API Key) | 6h | P0 |
 | OAuth2 provider with token caching | 6h | P1 |
-| Database auth provider | 4h | P1 |
+| **Kerberos providers (Keytab + Credential Cache)** | **10h** | **P0** |
+| **Kerberos HTTP (SPNEGO) integration** | **6h** | **P1** |
+| **Kerberos Database/Kafka integration** | **6h** | **P1** |
+| Database auth provider (username/password) | 4h | P1 |
 | Credential resolvers (Env, AWS, Vault) | 8h | P1 |
 | Integration with HttpTask | 3h | P0 |
 | DTO/API changes | 3h | P0 |
-| UI authentication panel | 6h | P1 |
-| Testing (unit + integration) | 8h | P0 |
-| Documentation | 4h | P1 |
-| **Total** | **52 hours** | **~6.5 days** |
+| UI authentication panel | 8h | P1 |
+| Testing (unit + integration) | 12h | P0 |
+| Documentation | 6h | P1 |
+| **Total** | **82 hours** | **~10 days** |
 
 ### 🎯 Security Principles
 
@@ -2240,12 +2743,17 @@ authContext.toString(); // Returns <REDACTED>
 
 ### ✅ Success Metrics
 
-- ✅ Support 5+ authentication types (Basic, Bearer, API Key, OAuth2, mTLS)
+- ✅ Support 8+ authentication types (Basic, Bearer, API Key, OAuth2, **Kerberos**, mTLS, DB)
+- ✅ **Kerberos keytab and credential cache (kinit) support**
+- ✅ **SPNEGO authentication for Kerberos HTTP services**
+- ✅ **Kerberos JDBC support for databases (Oracle, PostgreSQL, Hive)**
+- ✅ **Kerberos SASL/GSSAPI support for Kafka**
 - ✅ Zero credential persistence (verified by code review)
 - ✅ Support 3+ credential sources (Env, AWS, Vault)
 - ✅ 100% test coverage on auth providers
 - ✅ Security audit passes
 - ✅ Clear documentation on secure credential management
+- ✅ **Kerberos Subject caching for performance**
 
 ### 🔗 Integration with Other Items
 
@@ -2311,7 +2819,9 @@ public class MyAuthenticatedTask implements Task {
 - ✅ <30s worker failure recovery
 
 ### Item 10: Authentication (NEW)
-- ✅ Support 5+ authentication types
+- ✅ Support 8+ authentication types
+- ✅ **Kerberos (keytab + credential cache)**
+- ✅ **SPNEGO for HTTP, SASL/GSSAPI for Kafka**
 - ✅ Zero credential storage (100% in-memory)
 - ✅ Support 3+ credential sources
 - ✅ Security audit passes
@@ -2324,16 +2834,16 @@ public class MyAuthenticatedTask implements Task {
 | Item | Effort | Priority | Sequence |
 |------|--------|----------|----------|
 | **Item 7**: Pre-flight validation | 20h (~2.5 days) | **P0** | **1st** |
-| **Item 10**: Authentication support | 52h (~6.5 days) | **P0** | **2nd** |
+| **Item 10**: Authentication support (including Kerberos) | 82h (~10 days) | **P0** | **2nd** |
 | **Item 8**: SDK/Plugin architecture | 34h (~4.2 days) | **P1** | **3rd** |
 | **Item 9**: Distributed testing | 69h (~8.6 days) | **P2** | **4th** |
-| **Total** | **175 hours** | **~22 days** | - |
+| **Total** | **205 hours** | **~26 days** | - |
 
 ### Recommended Implementation Order
 
-**Phase 1: Foundation (9 days)**
+**Phase 1: Foundation (12.5 days)**
 - Item 7: Pre-flight validation (2.5 days)
-- Item 10: Authentication support (6.5 days)
+- Item 10: Authentication support with Kerberos (10 days)
 
 **Phase 2: Extensibility (4 days)**
 - Item 8: SDK/Plugin architecture (4 days)
@@ -2357,6 +2867,8 @@ public class MyAuthenticatedTask implements Task {
 **Questions for Discussion**:
 1. Should all 4 items be in same release?
 2. What's priority order? (Recommended: 7 → 10 → 8 → 9)
-3. Are we OK with 22 days timeline?
+3. Are we OK with **26 days timeline** (was 22 days, +4 for Kerberos)?
 4. Which credential sources to support first? (Env + AWS recommended)
 5. Any concerns with zero-storage authentication design?
+6. **Kerberos priority**: Do we need keytab + credential cache in first release, or keytab only?
+7. **Target resources**: Which need Kerberos first? (HTTP/Kafka/Database/All?)
