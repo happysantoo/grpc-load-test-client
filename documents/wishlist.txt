@@ -6,6 +6,10 @@
     c. Sustaining phase - once reach maximum Concurrency , fire reeuests continously.
 4. There needs to be UI to setup scale rules and continously monitor the current latency , throughput , number of users firing etc. It has to show graphs and tabular format.
 5. There needs to be a controller layer to support all the UI funcationality. For this , a framework like spring boot can be used.
-6.  The interface that defines the task should be simple to support any benchmarking.
+6. The interface that defines the task should be simple to support any benchmarking.
+7. BEfore initial run ,  we need a validation plan to make sure the services are functional.
+7. To qulaify as a framework , there needs to be development of a thin SDK where someone can pull the SDK and create tasks that can be registered by the presence of them in the classpath.(call it a lib extension)
+8. Alternaitvely , we need to think about a distributed testing environment where a task can be distributed to a bunch of workers. Workers can be connected to a master via GRPC. propose a design and architecture plan considering various design aspects.Once architecture is finalized , we can work on execution.
+
 
 

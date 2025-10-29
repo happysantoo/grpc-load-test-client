@@ -1,6 +1,5 @@
 # Building a Production-Ready Load Testing Framework: Lessons from VajraEdge
 
-**Author**: Santhosh Kuppusamy  
 **Date**: October 28, 2025  
 **Tags**: #Performance #LoadTesting #Java21 #VirtualThreads #ProductionReady
 
@@ -8,13 +7,12 @@
 
 ## Introduction
 
-Today marks a significant milestone in VajraEdge's journey from a functional prototype to a production-ready load testing framework. After intensive code review and user testing, I've implemented a comprehensive set of improvements that address the core challenges of building reliable, observable, and maintainable performance testing tools.
+Today marks a significant milestone in VajraEdge's journey from a functional prototype to a production-ready load testing framework. After intensive code review and user testing, I've implemented a new set of improvements that address the core challenges of building reliable, observable, and maintainable performance testing tools.
 
 This post chronicles the changes made today and the thinking behind them—not just what changed, but *why* these changes matter for anyone building production-grade software.
 
 ## The Wake-Up Call: Code Review Insights
 
-A few days ago, I received detailed code review feedback on VajraEdge's PR #4. The reviewer raised excellent points that many of us encounter when moving from "it works on my machine" to "it works reliably in production":
 
 - **Input validation gaps**: What happens when users provide invalid configurations?
 - **Resource cleanup concerns**: Are we handling interruptions gracefully?
@@ -82,7 +80,7 @@ try {
 
 **Why This Matters**: Load tests often run for minutes or hours. Being able to stop cleanly without leaving zombie threads or locked resources is critical for operational sanity.
 
-**Key Insight**: *Graceful shutdown is a feature, not an afterthought.* It shows respect for the user's time and system resources.
+**Key Insight**: *Graceful shutdown is a feature, not an afterthought.* 
 
 ### 3. Error Handling: Embrace Failure as Data
 
@@ -199,7 +197,7 @@ During manual testing, I discovered three UI issues that, while minor, significa
 
 ### 7. Test Coverage: Confidence Through Verification
 
-**The Problem**: Service package coverage was 68%, with many edge cases untested.
+**The Problem**: Test coverage was less , with many edge cases untested.
 
 **The Solution**: Added 14 comprehensive test cases covering:
 - Different ramp strategies (LINEAR, STEP)
@@ -209,7 +207,7 @@ During manual testing, I discovered three UI issues that, while minor, significa
 - Edge cases (null parameters, unknown types, case sensitivity)
 
 **Results**:
-- Service package: 68% → 77% (+9%)
+
 - Overall project: 71% → 74% (+3%)
 - Total tests: 376+ (all passing)
 
@@ -236,30 +234,6 @@ Code structure signals intent. Well-factored code invites contribution; tangled 
 ### 5. **Polish**
 Small details matter. A professional UI, clear error messages, smooth interactions—these build trust.
 
-## Lessons for Framework Builders
-
-If you're building a framework, library, or tool, here are my takeaways from this experience:
-
-### 1. **Validate Early, Validate Often**
-Don't let invalid inputs propagate. Fail at the boundary with clear messages.
-
-### 2. **Make Errors Visible**
-Track them, count them, expose them. Errors are signal, not noise.
-
-### 3. **Shutdown is a Feature**
-Design for graceful shutdown from day one. Your future self will thank you.
-
-### 4. **Observability = Empathy**
-Every metric you add is a gift to your users. What questions are they asking?
-
-### 5. **Refactor When It Hurts**
-If you're struggling to understand your own code, it's time to refactor.
-
-### 6. **Test Behavior, Not Implementation**
-Focus on contracts: "Given X, expect Y." Implementation can change.
-
-### 7. **Polish Shows You Care**
-Users notice details. A polished product signals quality throughout.
 
 ## The Road Ahead
 
@@ -280,46 +254,7 @@ But this is just the foundation. Future enhancements I'm considering:
 - **AI-powered analysis**: Automatic bottleneck diagnosis
 - **Test templates**: Pre-configured scenarios
 
-## Conclusion: The Journey to Maturity
 
-Building VajraEdge has been a masterclass in the difference between "working code" and "production code." Today's changes—seemingly mundane topics like validation, error handling, and metrics—are what separate toys from tools.
-
-The framework that started as an experiment with Java 21's virtual threads is maturing into something I'd be comfortable deploying in production. Not because it's perfect (no software is), but because it's:
-
-- **Predictable**: I know how it behaves
-- **Observable**: I can see what it's doing
-- **Reliable**: It handles errors gracefully
-- **Maintainable**: The next developer can understand it
-
-If you're building software—especially frameworks or tools—I hope this journey resonates. The path to production-ready isn't about big features; it's about sweating the details that make software trustworthy.
-
-## Try It Yourself
-
-VajraEdge is open source and ready for experimentation:
-
-```bash
-git clone https://github.com/happysantoo/vajraedge.git
-cd vajraedge
-./gradlew bootRun
-# Open http://localhost:8081
-```
-
-I'd love to hear your feedback, especially if you're working on similar challenges in the performance testing space.
 
 ---
 
-**What's your experience with moving code from prototype to production? What details have you sweated? Let's discuss in the comments.**
-
----
-
-## Acknowledgments
-
-Special thanks to the reviewer of PR #4 whose thoughtful feedback sparked this round of improvements. Code review done well is a gift—it makes all of us better engineers.
-
----
-
-**Connect with me:**
-- GitHub: [@happysantoo](https://github.com/happysantoo)
-- Project: [VajraEdge](https://github.com/happysantoo/vajraedge)
-
-*Building better tools, one commit at a time.* 🚀
