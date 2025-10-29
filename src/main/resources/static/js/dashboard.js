@@ -313,41 +313,78 @@ function updateDiagnostics(metrics) {
             prevUsers: previousMetrics?.activeTasks
         });
         
-        if (queueDepth > virtualUsers * 0.5) {
-            // Significant queue buildup = VajraEdge bottleneck
+        // Priority 1: Check for VajraEdge bottleneck (queue buildup)
+        if (queueDepth > virtualUsers * 2 && queueDepth > 50) {
+            // Severe queue buildup = VajraEdge bottleneck
             bottleneckEl.textContent = 'VajraEdge (Queue Buildup)';
             bottleneckEl.className = 'badge bg-danger';
-        } else if (previousMetrics && virtualUsers > 20) {
-            // Check for TPS plateau (service saturation)
+        } else if (queueDepth > virtualUsers && queueDepth > 20) {
+            // Moderate queue buildup
+            bottleneckEl.textContent = 'VajraEdge (Growing Queue)';
+            bottleneckEl.className = 'badge bg-warning';
+        } 
+        // Priority 2: Check for service saturation (needs sufficient data)
+        else if (previousMetrics && virtualUsers >= 10) {
             const prevTps = previousMetrics.currentTps || 0;
             const prevUsers = previousMetrics.activeTasks || 0;
+            const prevLatency = previousMetrics.avgLatencyMs || 0;
             
-            // If users increased but TPS didn't increase proportionally, service is saturated
             const userIncrease = virtualUsers - prevUsers;
             const tpsIncrease = tps - prevTps;
+            const latencyIncrease = avgLatency - prevLatency;
             
-            console.log('TPS plateau check:', { userIncrease, tpsIncrease, threshold: userIncrease * 0.3 });
+            // Calculate TPS per user to detect saturation
+            const currentTpsPerUser = virtualUsers > 0 ? tps / virtualUsers : 0;
+            const prevTpsPerUser = prevUsers > 0 ? prevTps / prevUsers : 0;
+            const tpsPerUserDrop = prevTpsPerUser > 0 ? (prevTpsPerUser - currentTpsPerUser) / prevTpsPerUser : 0;
             
-            if (userIncrease >= 5 && tpsIncrease < (userIncrease * 0.3)) {
-                // Users went up significantly but TPS barely increased = Service bottleneck
-                bottleneckEl.textContent = 'HTTP Service (Saturated)';
+            console.log('Service saturation check:', { 
+                userIncrease, 
+                tpsIncrease, 
+                latencyIncrease,
+                currentTpsPerUser: currentTpsPerUser.toFixed(2),
+                prevTpsPerUser: prevTpsPerUser.toFixed(2),
+                tpsPerUserDrop: (tpsPerUserDrop * 100).toFixed(1) + '%'
+            });
+            
+            // Service is saturated if:
+            // 1. Users increased significantly but TPS didn't keep pace
+            // 2. TPS per user is dropping (efficiency going down)
+            // 3. Latency is increasing
+            if (userIncrease >= 3) {
+                if (tpsIncrease < userIncrease * 0.5 || tpsPerUserDrop > 0.15) {
+                    // TPS not keeping up with user growth = Service saturated
+                    bottleneckEl.textContent = 'HTTP Service (Saturated)';
+                    bottleneckEl.className = 'badge bg-warning';
+                } else if (latencyIncrease > 100 && avgLatency > 500) {
+                    // Latency climbing = Service under stress
+                    bottleneckEl.textContent = 'HTTP Service (High Latency)';
+                    bottleneckEl.className = 'badge bg-warning';
+                } else if (avgLatency < 300 && queueDepth < 10) {
+                    // Good latency, no queue = Healthy
+                    bottleneckEl.textContent = 'None (Healthy)';
+                    bottleneckEl.className = 'badge bg-success';
+                } else {
+                    bottleneckEl.textContent = 'Analyzing...';
+                    bottleneckEl.className = 'badge bg-secondary';
+                }
+            } else if (avgLatency > 1000) {
+                // High latency even with stable users = Service bottleneck
+                bottleneckEl.textContent = 'HTTP Service (High Latency)';
                 bottleneckEl.className = 'badge bg-warning';
-            } else if (queueDepth === 0 && virtualUsers > 0 && avgLatency < 1000) {
+            } else if (queueDepth < 5 && avgLatency < 300) {
                 // No queue, good latency = Healthy
                 bottleneckEl.textContent = 'None (Healthy)';
                 bottleneckEl.className = 'badge bg-success';
-            } else if (avgLatency > 2000) {
-                // High latency indicates service bottleneck
-                bottleneckEl.textContent = 'HTTP Service (High Latency)';
-                bottleneckEl.className = 'badge bg-warning';
             } else {
                 bottleneckEl.textContent = 'Analyzing...';
                 bottleneckEl.className = 'badge bg-secondary';
             }
-        } else if (queueDepth === 0 && virtualUsers > 0) {
-            // No queue, tasks flowing = Healthy
-            bottleneckEl.textContent = 'None (Healthy)';
-            bottleneckEl.className = 'badge bg-success';
+        } 
+        // Priority 3: Initial state (not enough data yet)
+        else if (virtualUsers < 10 || !previousMetrics) {
+            bottleneckEl.textContent = 'Warming Up...';
+            bottleneckEl.className = 'badge bg-info';
         } else {
             bottleneckEl.textContent = 'Analyzing...';
             bottleneckEl.className = 'badge bg-secondary';

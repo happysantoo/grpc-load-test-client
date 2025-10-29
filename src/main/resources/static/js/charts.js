@@ -13,6 +13,7 @@ let latencyData = {
 
 // Track test phase for color coding
 let currentPhase = 'RAMP_UP'; // RAMP_UP or SUSTAIN
+let phaseTransitionPoint = -1; // Track when phase changed for visual separation
 
 // Initialize charts
 window.initializeCharts = function initializeCharts() {
@@ -47,8 +48,8 @@ window.initializeCharts = function initializeCharts() {
                 backgroundColor: 'rgba(75, 192, 192, 0.1)',
                 pointBackgroundColor: [],
                 pointBorderColor: [],
-                pointRadius: 4,
-                pointHoverRadius: 6,
+                pointRadius: 5,
+                pointHoverRadius: 7,
                 tension: 0.4,
                 fill: true
             }]
@@ -58,7 +59,39 @@ window.initializeCharts = function initializeCharts() {
             maintainAspectRatio: true,
             plugins: {
                 legend: {
-                    display: true
+                    display: true,
+                    labels: {
+                        generateLabels: function(chart) {
+                            return [
+                                {
+                                    text: 'TPS (Ramp-Up)',
+                                    fillStyle: 'rgb(23, 162, 184)',
+                                    strokeStyle: 'rgb(23, 162, 184)',
+                                    lineWidth: 2,
+                                    pointStyle: 'circle'
+                                },
+                                {
+                                    text: 'TPS (Sustain)',
+                                    fillStyle: 'rgb(40, 167, 69)',
+                                    strokeStyle: 'rgb(40, 167, 69)',
+                                    lineWidth: 2,
+                                    pointStyle: 'circle'
+                                }
+                            ];
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'TPS: ' + context.parsed.y.toFixed(2);
+                        },
+                        afterLabel: function(context) {
+                            const idx = context.dataIndex;
+                            const phase = context.chart.data.datasets[0].pointBackgroundColor[idx] === 'rgb(40, 167, 69)' ? 'Sustain' : 'Ramp-Up';
+                            return 'Phase: ' + phase;
+                        }
+                    }
                 }
             },
             scales: {
@@ -103,8 +136,8 @@ window.initializeCharts = function initializeCharts() {
                     backgroundColor: 'rgba(54, 162, 235, 0.1)',
                     pointBackgroundColor: [],
                     pointBorderColor: [],
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
                     tension: 0.4
                 },
                 {
@@ -114,8 +147,8 @@ window.initializeCharts = function initializeCharts() {
                     backgroundColor: 'rgba(255, 206, 86, 0.1)',
                     pointBackgroundColor: [],
                     pointBorderColor: [],
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
                     tension: 0.4
                 },
                 {
@@ -125,8 +158,8 @@ window.initializeCharts = function initializeCharts() {
                     backgroundColor: 'rgba(255, 99, 132, 0.1)',
                     pointBackgroundColor: [],
                     pointBorderColor: [],
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
                     tension: 0.4
                 }
             ]
@@ -136,7 +169,69 @@ window.initializeCharts = function initializeCharts() {
             maintainAspectRatio: true,
             plugins: {
                 legend: {
-                    display: true
+                    display: true,
+                    labels: {
+                        generateLabels: function(chart) {
+                            return [
+                                {
+                                    text: 'P50 (Ramp-Up)',
+                                    fillStyle: 'rgb(54, 162, 235)',
+                                    strokeStyle: 'rgb(54, 162, 235)',
+                                    lineWidth: 2,
+                                    pointStyle: 'circle'
+                                },
+                                {
+                                    text: 'P50 (Sustain)',
+                                    fillStyle: 'rgb(23, 162, 184)',
+                                    strokeStyle: 'rgb(23, 162, 184)',
+                                    lineWidth: 2,
+                                    pointStyle: 'circle'
+                                },
+                                {
+                                    text: 'P95 (Ramp-Up)',
+                                    fillStyle: 'rgb(255, 206, 86)',
+                                    strokeStyle: 'rgb(255, 206, 86)',
+                                    lineWidth: 2,
+                                    pointStyle: 'circle'
+                                },
+                                {
+                                    text: 'P95 (Sustain)',
+                                    fillStyle: 'rgb(255, 193, 7)',
+                                    strokeStyle: 'rgb(255, 193, 7)',
+                                    lineWidth: 2,
+                                    pointStyle: 'circle'
+                                },
+                                {
+                                    text: 'P99 (Ramp-Up)',
+                                    fillStyle: 'rgb(255, 99, 132)',
+                                    strokeStyle: 'rgb(255, 99, 132)',
+                                    lineWidth: 2,
+                                    pointStyle: 'circle'
+                                },
+                                {
+                                    text: 'P99 (Sustain)',
+                                    fillStyle: 'rgb(220, 53, 69)',
+                                    strokeStyle: 'rgb(220, 53, 69)',
+                                    lineWidth: 2,
+                                    pointStyle: 'circle'
+                                }
+                            ];
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + 'ms';
+                        },
+                        afterLabel: function(context) {
+                            const idx = context.dataIndex;
+                            const sustainColors = ['rgb(23, 162, 184)', 'rgb(255, 193, 7)', 'rgb(220, 53, 69)'];
+                            const color = context.dataset.pointBackgroundColor[idx];
+                            const phase = sustainColors.includes(color) ? 'Sustain' : 'Ramp-Up';
+                            return 'Phase: ' + phase;
+                        }
+                    }
                 }
             },
             scales: {
@@ -180,19 +275,22 @@ window.updateCharts = function updateCharts(metrics, phase) {
         }
     }
 
-    // Update current phase
-    if (phase) {
+    // Track phase transitions
+    const previousPhase = currentPhase;
+    if (phase && phase !== currentPhase) {
         currentPhase = phase;
+        phaseTransitionPoint = tpsChart.data.labels.length;
+        console.log('Phase transition detected:', previousPhase, '->', currentPhase, 'at point', phaseTransitionPoint);
     }
 
     const timestamp = new Date().toLocaleTimeString();
     
-    // Define colors based on phase
+    // Define colors based on phase - using more distinct colors for sustain
     const isSustain = currentPhase === 'SUSTAIN';
-    const tpsPointColor = isSustain ? 'rgb(40, 167, 69)' : 'rgb(75, 192, 192)'; // Green for sustain, teal for ramp
-    const p50Color = isSustain ? 'rgb(23, 162, 184)' : 'rgb(54, 162, 235)'; // Darker blue for sustain
-    const p95Color = isSustain ? 'rgb(255, 193, 7)' : 'rgb(255, 206, 86)'; // Darker yellow for sustain
-    const p99Color = isSustain ? 'rgb(220, 53, 69)' : 'rgb(255, 99, 132)'; // Darker red for sustain
+    const tpsPointColor = isSustain ? 'rgb(40, 167, 69)' : 'rgb(23, 162, 184)'; // Bright green for sustain, teal for ramp
+    const p50Color = isSustain ? 'rgb(23, 162, 184)' : 'rgb(54, 162, 235)'; // Darker teal for sustain, light blue for ramp
+    const p95Color = isSustain ? 'rgb(255, 193, 7)' : 'rgb(255, 206, 86)'; // Darker amber for sustain, light yellow for ramp
+    const p99Color = isSustain ? 'rgb(220, 53, 69)' : 'rgb(255, 99, 132)'; // Darker red for sustain, light red for ramp
 
     // Update TPS chart
     tpsChart.data.labels.push(timestamp);
@@ -247,6 +345,7 @@ window.updateCharts = function updateCharts(metrics, phase) {
 // Reset charts when starting a new test
 window.resetCharts = function resetCharts() {
     currentPhase = 'RAMP_UP'; // Reset to ramp-up phase
+    phaseTransitionPoint = -1; // Reset phase transition tracking
     
     if (tpsChart) {
         tpsChart.data.labels = [];
