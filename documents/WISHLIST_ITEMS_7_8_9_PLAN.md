@@ -2801,6 +2801,908 @@ public class MyAuthenticatedTask implements Task {
 
 ---
 
+## Item 11: Test Suites (Multi-Task Scenarios) (NEW)
+
+### 📋 Requirement
+> "Put together a suite which can consist of multiple tasks using multiple different plugins."
+
+### 🎯 Objective
+Enable **realistic multi-step load testing scenarios** where a test suite orchestrates multiple task types in sequence, parallel, or weighted distribution. Supports complex workflows like:
+- User journey: Login → Browse → Add to Cart → Checkout
+- Microservices testing: API Gateway → Auth Service → Business Logic → Database
+- Mixed workload: 70% reads, 20% writes, 10% admin operations
+- Protocol diversity: HTTP + Kafka + Database in single test
+
+### 🏗️ Architecture Design
+
+#### Core Concepts
+- **Test Suite**: Collection of test scenarios with shared configuration
+- **Test Scenario**: Single test with specific task type, load profile, and duration
+- **Task Mix**: Weighted distribution of multiple task types in one scenario
+- **Sequential Execution**: Scenarios run one after another
+- **Parallel Execution**: Scenarios run simultaneously
+- **Data Correlation**: Pass data between scenarios (e.g., login token → API calls)
+
+#### Component Structure
+```
+com.vajraedge.perftest.suite/
+├── TestSuite.java                    (Suite definition)
+├── TestScenario.java                 (Individual scenario)
+├── TaskMix.java                      (Weighted task distribution)
+├── ScenarioResult.java               (Scenario execution results)
+├── SuiteExecutor.java                (Suite orchestration)
+├── execution/
+│   ├── SequentialExecutor.java       (Run scenarios sequentially)
+│   ├── ParallelExecutor.java         (Run scenarios in parallel)
+│   └── MixedExecutor.java            (Weighted task distribution)
+└── correlation/
+    ├── DataStore.java                (Cross-scenario data sharing)
+    └── CorrelationContext.java       (Request/response correlation)
+```
+
+### 📝 Implementation Details
+
+#### 1. **TestSuite Model**
+
+```java
+package com.vajraedge.perftest.suite;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Represents a collection of test scenarios.
+ * Scenarios can be executed sequentially or in parallel.
+ */
+public class TestSuite {
+    
+    private String suiteId;
+    private String name;
+    private String description;
+    private ExecutionMode executionMode; // SEQUENTIAL, PARALLEL
+    private List<TestScenario> scenarios;
+    private Map<String, Object> globalConfig;
+    private boolean stopOnFailure;
+    
+    public enum ExecutionMode {
+        SEQUENTIAL,  // Run scenarios one after another
+        PARALLEL     // Run scenarios simultaneously
+    }
+    
+    public TestSuite(String name) {
+        this.suiteId = java.util.UUID.randomUUID().toString();
+        this.name = name;
+        this.scenarios = new ArrayList<>();
+        this.globalConfig = new HashMap<>();
+        this.executionMode = ExecutionMode.SEQUENTIAL;
+        this.stopOnFailure = false;
+    }
+    
+    public void addScenario(TestScenario scenario) {
+        scenarios.add(scenario);
+    }
+    
+    public void setGlobalConfig(String key, Object value) {
+        globalConfig.put(key, value);
+    }
+    
+    // Getters and setters
+    public String getSuiteId() { return suiteId; }
+    public String getName() { return name; }
+    public List<TestScenario> getScenarios() { return scenarios; }
+    public ExecutionMode getExecutionMode() { return executionMode; }
+    public void setExecutionMode(ExecutionMode mode) { this.executionMode = mode; }
+    public boolean isStopOnFailure() { return stopOnFailure; }
+    public void setStopOnFailure(boolean stop) { this.stopOnFailure = stop; }
+}
+```
+
+#### 2. **TestScenario Model**
+
+```java
+package com.vajraedge.perftest.suite;
+
+import com.vajraedge.perftest.dto.TestConfigRequest;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Represents a single test scenario within a suite.
+ * Can use a single task type or a mix of multiple tasks.
+ */
+public class TestScenario {
+    
+    private String scenarioId;
+    private String name;
+    private String description;
+    private TestConfigRequest config;
+    private TaskMix taskMix;  // Optional: for multi-task scenarios
+    private Map<String, String> correlationMapping; // Output → Input mapping
+    private int delayAfterSeconds; // Wait time after scenario completes
+    
+    public TestScenario(String name) {
+        this.scenarioId = java.util.UUID.randomUUID().toString();
+        this.name = name;
+        this.correlationMapping = new HashMap<>();
+        this.delayAfterSeconds = 0;
+    }
+    
+    public TestScenario withConfig(TestConfigRequest config) {
+        this.config = config;
+        return this;
+    }
+    
+    public TestScenario withTaskMix(TaskMix taskMix) {
+        this.taskMix = taskMix;
+        return this;
+    }
+    
+    public TestScenario correlate(String outputKey, String inputKey) {
+        correlationMapping.put(outputKey, inputKey);
+        return this;
+    }
+    
+    public TestScenario delayAfter(int seconds) {
+        this.delayAfterSeconds = seconds;
+        return this;
+    }
+    
+    // Getters
+    public String getScenarioId() { return scenarioId; }
+    public String getName() { return name; }
+    public TestConfigRequest getConfig() { return config; }
+    public TaskMix getTaskMix() { return taskMix; }
+    public Map<String, String> getCorrelationMapping() { return correlationMapping; }
+    public int getDelayAfterSeconds() { return delayAfterSeconds; }
+}
+```
+
+#### 3. **TaskMix (Weighted Task Distribution)**
+
+```java
+package com.vajraedge.perftest.suite;
+
+import com.vajraedge.perftest.core.Task;
+import com.vajraedge.perftest.core.TaskFactory;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+/**
+ * Defines a weighted distribution of multiple task types.
+ * Example: 70% GET requests, 20% POST, 10% DELETE
+ */
+public class TaskMix {
+    
+    private List<WeightedTask> tasks;
+    private int totalWeight;
+    private Random random;
+    
+    public TaskMix() {
+        this.tasks = new ArrayList<>();
+        this.totalWeight = 0;
+        this.random = new Random();
+    }
+    
+    /**
+     * Add a task type with its weight.
+     * 
+     * @param taskFactory Factory to create the task
+     * @param weight Relative weight (e.g., 70 for 70%)
+     */
+    public TaskMix addTask(TaskFactory taskFactory, int weight) {
+        tasks.add(new WeightedTask(taskFactory, weight));
+        totalWeight += weight;
+        return this;
+    }
+    
+    /**
+     * Select a task based on weighted distribution.
+     */
+    public Task selectTask(long taskId) {
+        int randomWeight = random.nextInt(totalWeight);
+        int cumulative = 0;
+        
+        for (WeightedTask wt : tasks) {
+            cumulative += wt.weight;
+            if (randomWeight < cumulative) {
+                return wt.factory.createTask(taskId);
+            }
+        }
+        
+        // Fallback to first task (should never happen)
+        return tasks.get(0).factory.createTask(taskId);
+    }
+    
+    public List<WeightedTask> getTasks() {
+        return tasks;
+    }
+    
+    public static class WeightedTask {
+        private TaskFactory factory;
+        private int weight;
+        private String description;
+        
+        public WeightedTask(TaskFactory factory, int weight) {
+            this.factory = factory;
+            this.weight = weight;
+        }
+        
+        public TaskFactory getFactory() { return factory; }
+        public int getWeight() { return weight; }
+        public String getDescription() { return description; }
+        public void setDescription(String desc) { this.description = desc; }
+    }
+}
+```
+
+#### 4. **SuiteExecutor (Orchestration)**
+
+```java
+package com.vajraedge.perftest.suite;
+
+import com.vajraedge.perftest.service.TestExecutionService;
+import com.vajraedge.perftest.correlation.DataStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * Executes test suites with support for sequential and parallel scenarios.
+ */
+@Component
+public class SuiteExecutor {
+    
+    private static final Logger logger = LoggerFactory.getLogger(SuiteExecutor.class);
+    
+    private final TestExecutionService testExecutionService;
+    private final DataStore dataStore;
+    
+    public SuiteExecutor(TestExecutionService testExecutionService) {
+        this.testExecutionService = testExecutionService;
+        this.dataStore = new DataStore();
+    }
+    
+    /**
+     * Execute a test suite.
+     */
+    public SuiteResult execute(TestSuite suite) {
+        logger.info("Starting test suite: {} ({})", suite.getName(), suite.getSuiteId());
+        
+        SuiteResult result = new SuiteResult(suite.getSuiteId(), suite.getName());
+        result.setStartTime(System.currentTimeMillis());
+        
+        try {
+            if (suite.getExecutionMode() == TestSuite.ExecutionMode.SEQUENTIAL) {
+                executeSequential(suite, result);
+            } else {
+                executeParallel(suite, result);
+            }
+            
+            result.setStatus(SuiteResult.Status.COMPLETED);
+            
+        } catch (Exception e) {
+            logger.error("Suite execution failed: {}", suite.getSuiteId(), e);
+            result.setStatus(SuiteResult.Status.FAILED);
+            result.setError(e.getMessage());
+        } finally {
+            result.setEndTime(System.currentTimeMillis());
+        }
+        
+        logger.info("Suite completed: {} in {}ms", 
+            suite.getName(), result.getDurationMs());
+        
+        return result;
+    }
+    
+    /**
+     * Execute scenarios sequentially.
+     */
+    private void executeSequential(TestSuite suite, SuiteResult suiteResult) 
+            throws Exception {
+        
+        for (TestScenario scenario : suite.getScenarios()) {
+            logger.info("Starting scenario: {}", scenario.getName());
+            
+            ScenarioResult scenarioResult = executeScenario(scenario);
+            suiteResult.addScenarioResult(scenarioResult);
+            
+            if (scenarioResult.getStatus() == ScenarioResult.Status.FAILED 
+                && suite.isStopOnFailure()) {
+                logger.warn("Stopping suite due to scenario failure: {}", 
+                    scenario.getName());
+                break;
+            }
+            
+            // Delay after scenario if configured
+            if (scenario.getDelayAfterSeconds() > 0) {
+                Thread.sleep(scenario.getDelayAfterSeconds() * 1000L);
+            }
+        }
+    }
+    
+    /**
+     * Execute scenarios in parallel.
+     */
+    private void executeParallel(TestSuite suite, SuiteResult suiteResult) 
+            throws Exception {
+        
+        List<CompletableFuture<ScenarioResult>> futures = new ArrayList<>();
+        
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (TestScenario scenario : suite.getScenarios()) {
+                CompletableFuture<ScenarioResult> future = CompletableFuture.supplyAsync(
+                    () -> {
+                        try {
+                            return executeScenario(scenario);
+                        } catch (Exception e) {
+                            logger.error("Scenario failed: {}", scenario.getName(), e);
+                            ScenarioResult errorResult = new ScenarioResult(
+                                scenario.getScenarioId(), scenario.getName());
+                            errorResult.setStatus(ScenarioResult.Status.FAILED);
+                            errorResult.setError(e.getMessage());
+                            return errorResult;
+                        }
+                    },
+                    executor
+                );
+                futures.add(future);
+            }
+            
+            // Wait for all scenarios to complete
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+            
+            // Collect results
+            for (CompletableFuture<ScenarioResult> future : futures) {
+                suiteResult.addScenarioResult(future.get());
+            }
+        }
+    }
+    
+    /**
+     * Execute a single scenario.
+     */
+    private ScenarioResult executeScenario(TestScenario scenario) {
+        ScenarioResult result = new ScenarioResult(
+            scenario.getScenarioId(), scenario.getName());
+        result.setStartTime(System.currentTimeMillis());
+        
+        try {
+            // Apply correlation data if needed
+            applyCorrelation(scenario);
+            
+            // Start the test
+            String testId;
+            if (scenario.getTaskMix() != null) {
+                testId = testExecutionService.startTestWithMix(
+                    scenario.getConfig(), scenario.getTaskMix());
+            } else {
+                testId = testExecutionService.startTest(scenario.getConfig());
+            }
+            
+            result.setTestId(testId);
+            
+            // Wait for test completion
+            waitForTestCompletion(testId);
+            
+            // Store correlation data for next scenarios
+            storeCorrelationData(scenario, testId);
+            
+            result.setStatus(ScenarioResult.Status.COMPLETED);
+            
+        } catch (Exception e) {
+            logger.error("Scenario execution failed: {}", scenario.getName(), e);
+            result.setStatus(ScenarioResult.Status.FAILED);
+            result.setError(e.getMessage());
+        } finally {
+            result.setEndTime(System.currentTimeMillis());
+        }
+        
+        return result;
+    }
+    
+    private void applyCorrelation(TestScenario scenario) {
+        // Get data from previous scenarios and inject into current scenario
+        scenario.getCorrelationMapping().forEach((outputKey, inputKey) -> {
+            Object value = dataStore.get(outputKey);
+            if (value != null) {
+                // Inject into scenario config
+                scenario.getConfig().setTaskParameter(value);
+            }
+        });
+    }
+    
+    private void storeCorrelationData(TestScenario scenario, String testId) {
+        // Extract data from test results and store for correlation
+        // Implementation depends on what data needs to be passed
+    }
+    
+    private void waitForTestCompletion(String testId) throws InterruptedException {
+        // Poll test status until complete
+        while (testExecutionService.isTestRunning(testId)) {
+            Thread.sleep(1000);
+        }
+    }
+}
+```
+
+#### 5. **Example: E-commerce User Journey Suite**
+
+```java
+// Create a suite simulating user journey
+TestSuite ecommerceSuite = new TestSuite("E-commerce User Journey");
+ecommerceSuite.setExecutionMode(TestSuite.ExecutionMode.SEQUENTIAL);
+
+// Scenario 1: User Login (100 concurrent users)
+TestScenario loginScenario = new TestScenario("User Login")
+    .withConfig(new TestConfigRequest()
+        .setMode(TestMode.CONCURRENCY)
+        .setStartingConcurrency(100)
+        .setMaxConcurrency(100)
+        .setTestDurationSeconds(30)
+        .setTaskType("HTTP")
+        .setTaskParameter("https://api.example.com/login")
+        .setAuthType("NONE"));
+
+// Scenario 2: Browse Products (sustained 500 users)
+TestScenario browseScenario = new TestScenario("Browse Products")
+    .withConfig(new TestConfigRequest()
+        .setMode(TestMode.CONCURRENCY)
+        .setStartingConcurrency(100)
+        .setMaxConcurrency(500)
+        .setRampDurationSeconds(60)
+        .setSustainDurationSeconds(300)
+        .setTaskType("HTTP")
+        .setTaskParameter("https://api.example.com/products"))
+    .correlate("auth_token", "bearer_token")  // Use token from login
+    .delayAfter(10);  // 10 second cooldown
+
+// Scenario 3: Mixed Operations (70% reads, 30% writes)
+TaskMix checkoutMix = new TaskMix()
+    .addTask(taskId -> new HttpTask("https://api.example.com/cart"), 70)
+    .addTask(taskId -> new HttpTask("https://api.example.com/checkout"), 30);
+
+TestScenario checkoutScenario = new TestScenario("Checkout Flow")
+    .withConfig(new TestConfigRequest()
+        .setMode(TestMode.CONCURRENCY)
+        .setMaxConcurrency(200)
+        .setTestDurationSeconds(120))
+    .withTaskMix(checkoutMix);
+
+// Build suite
+ecommerceSuite.addScenario(loginScenario);
+ecommerceSuite.addScenario(browseScenario);
+ecommerceSuite.addScenario(checkoutScenario);
+
+// Execute
+SuiteExecutor executor = new SuiteExecutor(testExecutionService);
+SuiteResult result = executor.execute(ecommerceSuite);
+```
+
+#### 6. **Example: Microservices Suite (Parallel)**
+
+```java
+// Test multiple microservices simultaneously
+TestSuite microservicesSuite = new TestSuite("Microservices Load Test");
+microservicesSuite.setExecutionMode(TestSuite.ExecutionMode.PARALLEL);
+
+// API Gateway
+TestScenario gatewayScenario = new TestScenario("API Gateway")
+    .withConfig(new TestConfigRequest()
+        .setMaxConcurrency(1000)
+        .setTaskType("HTTP")
+        .setTaskParameter("https://gateway.example.com/api"));
+
+// Auth Service
+TestScenario authScenario = new TestScenario("Auth Service")
+    .withConfig(new TestConfigRequest()
+        .setMaxConcurrency(500)
+        .setTaskType("HTTP")
+        .setTaskParameter("https://auth.example.com/validate"));
+
+// Database Query
+TestScenario dbScenario = new TestScenario("Database Queries")
+    .withConfig(new TestConfigRequest()
+        .setMaxConcurrency(200)
+        .setTaskType("DATABASE")
+        .setTaskParameter("SELECT * FROM users LIMIT 100"));
+
+// Kafka Message Processing
+TestScenario kafkaScenario = new TestScenario("Kafka Consumers")
+    .withConfig(new TestConfigRequest()
+        .setMaxConcurrency(100)
+        .setTaskType("KAFKA")
+        .setTaskParameter("orders-topic"));
+
+microservicesSuite.addScenario(gatewayScenario);
+microservicesSuite.addScenario(authScenario);
+microservicesSuite.addScenario(dbScenario);
+microservicesSuite.addScenario(kafkaScenario);
+
+// All scenarios run simultaneously
+SuiteResult result = executor.execute(microservicesSuite);
+```
+
+### 🎨 REST API Integration
+
+#### Suite Management Endpoints
+
+```java
+@RestController
+@RequestMapping("/api/suites")
+public class SuiteController {
+    
+    @Autowired
+    private SuiteExecutor suiteExecutor;
+    
+    @PostMapping
+    public ResponseEntity<SuiteStatusResponse> startSuite(
+            @RequestBody @Valid TestSuiteRequest request) {
+        
+        TestSuite suite = buildSuite(request);
+        
+        // Execute asynchronously
+        CompletableFuture.runAsync(() -> suiteExecutor.execute(suite));
+        
+        return ResponseEntity.ok(new SuiteStatusResponse(
+            suite.getSuiteId(), "RUNNING"));
+    }
+    
+    @GetMapping("/{suiteId}")
+    public ResponseEntity<SuiteStatusResponse> getSuiteStatus(
+            @PathVariable String suiteId) {
+        // Return current status
+    }
+    
+    @GetMapping("/{suiteId}/results")
+    public ResponseEntity<SuiteResult> getSuiteResults(
+            @PathVariable String suiteId) {
+        // Return detailed results
+    }
+}
+```
+
+#### DTO: TestSuiteRequest
+
+```java
+public class TestSuiteRequest {
+    
+    @NotNull
+    private String name;
+    
+    private String description;
+    
+    @NotNull
+    private ExecutionMode executionMode;
+    
+    private boolean stopOnFailure;
+    
+    @NotEmpty
+    @Valid
+    private List<ScenarioRequest> scenarios;
+    
+    public enum ExecutionMode {
+        SEQUENTIAL, PARALLEL
+    }
+    
+    // Getters and setters
+}
+
+public class ScenarioRequest {
+    
+    @NotNull
+    private String name;
+    
+    private String description;
+    
+    @NotNull
+    @Valid
+    private TestConfigRequest config;
+    
+    @Valid
+    private TaskMixRequest taskMix;  // Optional
+    
+    private Map<String, String> correlationMapping;
+    
+    @Min(0)
+    private int delayAfterSeconds;
+    
+    // Getters and setters
+}
+
+public class TaskMixRequest {
+    
+    @NotEmpty
+    private List<WeightedTaskRequest> tasks;
+    
+    public static class WeightedTaskRequest {
+        @NotNull
+        private String taskType;
+        
+        private Object taskParameter;
+        
+        @Min(1)
+        @Max(100)
+        private int weight;  // Percentage
+        
+        private String description;
+        
+        // Getters and setters
+    }
+}
+```
+
+### 🎨 UI Integration
+
+#### Suite Configuration Panel
+
+```html
+<!-- Test Suite Builder -->
+<div class="card mb-3">
+    <div class="card-header">
+        <h5>🎯 Test Suite Builder</h5>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <label class="form-label">Suite Name</label>
+            <input type="text" class="form-control" id="suiteName" 
+                   placeholder="E-commerce User Journey">
+        </div>
+        
+        <div class="mb-3">
+            <label class="form-label">Execution Mode</label>
+            <select class="form-select" id="suiteExecutionMode">
+                <option value="SEQUENTIAL">Sequential (one after another)</option>
+                <option value="PARALLEL">Parallel (all at once)</option>
+            </select>
+        </div>
+        
+        <div class="mb-3">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="stopOnFailure">
+                <label class="form-check-label" for="stopOnFailure">
+                    Stop suite on scenario failure
+                </label>
+            </div>
+        </div>
+        
+        <hr>
+        
+        <!-- Scenario List -->
+        <div id="scenarioList">
+            <h6>Scenarios</h6>
+            <div class="list-group mb-3" id="scenarios">
+                <!-- Scenarios added dynamically -->
+            </div>
+            <button class="btn btn-primary" onclick="addScenario()">
+                + Add Scenario
+            </button>
+        </div>
+        
+        <hr>
+        
+        <button class="btn btn-success btn-lg w-100" onclick="startSuite()">
+            ▶️ Start Suite
+        </button>
+    </div>
+</div>
+
+<!-- Scenario Modal (for adding/editing) -->
+<div class="modal fade" id="scenarioModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Configure Scenario</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Scenario Name</label>
+                    <input type="text" class="form-control" id="scenarioName" 
+                           placeholder="User Login">
+                </div>
+                
+                <!-- Test Configuration (reuse existing test config fields) -->
+                <div id="scenarioTestConfig">
+                    <!-- Include all test config fields here -->
+                </div>
+                
+                <!-- Task Mix Option -->
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" 
+                               id="useTaskMix" onchange="toggleTaskMix()">
+                        <label class="form-check-label" for="useTaskMix">
+                            Use Task Mix (multiple task types)
+                        </label>
+                    </div>
+                </div>
+                
+                <div id="taskMixConfig" class="d-none">
+                    <h6>Task Mix</h6>
+                    <div id="taskMixList">
+                        <!-- Task mix entries -->
+                    </div>
+                    <button class="btn btn-sm btn-secondary" onclick="addTaskToMix()">
+                        + Add Task Type
+                    </button>
+                </div>
+                
+                <!-- Correlation -->
+                <div class="mb-3">
+                    <label class="form-label">Data Correlation (Optional)</label>
+                    <input type="text" class="form-control" id="correlationOutput" 
+                           placeholder="Output key from previous scenario">
+                    <input type="text" class="form-control mt-2" id="correlationInput" 
+                           placeholder="Input key for this scenario">
+                </div>
+                
+                <!-- Delay -->
+                <div class="mb-3">
+                    <label class="form-label">Delay After Scenario (seconds)</label>
+                    <input type="number" class="form-control" id="delayAfter" 
+                           value="0" min="0">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-primary" onclick="saveScenario()">
+                    Save Scenario
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+```
+
+```javascript
+// Suite management
+function startSuite() {
+    const suite = {
+        name: document.getElementById('suiteName').value,
+        executionMode: document.getElementById('suiteExecutionMode').value,
+        stopOnFailure: document.getElementById('stopOnFailure').checked,
+        scenarios: collectScenarios()
+    };
+    
+    fetch('/api/suites', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(suite)
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Suite started:', data.suiteId);
+        monitorSuite(data.suiteId);
+    });
+}
+
+function monitorSuite(suiteId) {
+    // Poll suite status and update UI
+    const interval = setInterval(() => {
+        fetch(`/api/suites/${suiteId}`)
+            .then(response => response.json())
+            .then(data => {
+                updateSuiteStatus(data);
+                if (data.status === 'COMPLETED' || data.status === 'FAILED') {
+                    clearInterval(interval);
+                }
+            });
+    }, 2000);
+}
+```
+
+### ⏱️ Effort Estimation
+
+| Component | Hours | Priority |
+|-----------|-------|----------|
+| Suite models (TestSuite, TestScenario, TaskMix) | 4h | P0 |
+| SuiteExecutor (sequential + parallel) | 8h | P0 |
+| TaskMix weighted selection | 4h | P0 |
+| Correlation/DataStore | 6h | P1 |
+| Suite REST API endpoints | 4h | P0 |
+| Suite DTO validation | 2h | P0 |
+| UI suite builder | 10h | P1 |
+| Integration with existing TestExecutionService | 4h | P0 |
+| Testing (unit + integration) | 8h | P0 |
+| Documentation & examples | 4h | P1 |
+| **Total** | **54 hours** | **~7 days** |
+
+### ✅ Success Metrics
+
+- ✅ Support sequential and parallel scenario execution
+- ✅ Support task mix with weighted distribution
+- ✅ 5+ example suites (e-commerce, microservices, mixed protocols)
+- ✅ Data correlation between scenarios works reliably
+- ✅ Suite execution visible in dashboard with real-time progress
+- ✅ Clear error reporting when scenarios fail
+- ✅ Documentation with real-world examples
+
+### 🔗 Integration with Other Items
+
+#### With Item 8 (SDK/Plugin)
+```java
+// Suite can use any plugin task
+TaskMix mix = new TaskMix()
+    .addTask(taskId -> httpPlugin.createTask(taskId), 60)
+    .addTask(taskId -> kafkaPlugin.createTask(taskId), 30)
+    .addTask(taskId -> customPlugin.createTask(taskId), 10);
+```
+
+#### With Item 9 (Distributed)
+```java
+// Suite scenarios can be distributed across workers
+// Each scenario runs on optimal worker set
+TestSuite suite = new TestSuite("Distributed E-commerce");
+suite.setExecutionMode(TestSuite.ExecutionMode.PARALLEL);
+suite.setDistributed(true);  // Distribute scenarios to workers
+```
+
+#### With Item 10 (Authentication)
+```java
+// Different scenarios can use different auth methods
+TestScenario publicApi = new TestScenario("Public API")
+    .withConfig(config.setAuthType("NONE"));
+
+TestScenario secureApi = new TestScenario("Secure API")
+    .withConfig(config.setAuthType("KERBEROS"));
+```
+
+### 💡 Real-World Use Cases
+
+**1. E-commerce Black Friday**
+```
+Suite: Black Friday Load Test
+├── Scenario 1: User Registration (100 concurrent, 5 min)
+├── Scenario 2: Product Browsing (1000 concurrent, ramp 5 min, sustain 30 min)
+├── Scenario 3: Cart Operations (500 concurrent, 70% add, 30% remove)
+└── Scenario 4: Checkout (200 concurrent, includes payment gateway)
+```
+
+**2. Microservices Health Check**
+```
+Suite: Microservices Load Test (PARALLEL)
+├── API Gateway → 10K req/s
+├── Auth Service → 5K req/s
+├── User Service → 3K req/s
+├── Order Service → 2K req/s
+└── Notification Service → 1K req/s
+```
+
+**3. Banking Transaction Flow**
+```
+Suite: Banking Transactions (SEQUENTIAL with correlation)
+├── Scenario 1: Login (get auth token)
+├── Scenario 2: Check Balance (use token, store account ID)
+├── Scenario 3: Transfer Money (use token + account ID)
+└── Scenario 4: View History (use token)
+```
+
+**4. IoT Data Pipeline**
+```
+Suite: IoT Data Flow
+├── Kafka Producer → Send device events (1000 TPS)
+├── Kafka Consumer → Process events
+├── Database Writes → Store processed data
+└── HTTP API → Query aggregated data
+```
+
+---
+
 ## Success Metrics
 
 ### Item 7: Validation
@@ -2827,6 +3729,14 @@ public class MyAuthenticatedTask implements Task {
 - ✅ Security audit passes
 - ✅ Clear documentation
 
+### Item 11: Test Suites (NEW)
+- ✅ Sequential and parallel scenario execution
+- ✅ Task mix with weighted distribution
+- ✅ Data correlation between scenarios
+- ✅ 5+ real-world example suites
+- ✅ Real-time suite progress in dashboard
+- ✅ Clear error reporting per scenario
+
 ---
 
 ## Revised Timeline & Effort
@@ -2836,19 +3746,21 @@ public class MyAuthenticatedTask implements Task {
 | **Item 7**: Pre-flight validation | 20h (~2.5 days) | **P0** | **1st** |
 | **Item 10**: Authentication support (including Kerberos) | 82h (~10 days) | **P0** | **2nd** |
 | **Item 8**: SDK/Plugin architecture | 34h (~4.2 days) | **P1** | **3rd** |
-| **Item 9**: Distributed testing | 69h (~8.6 days) | **P2** | **4th** |
-| **Total** | **205 hours** | **~26 days** | - |
+| **Item 11**: Test Suites (multi-task scenarios) | 54h (~7 days) | **P1** | **4th** |
+| **Item 9**: Distributed testing | 69h (~8.6 days) | **P2** | **5th** |
+| **Total** | **259 hours** | **~32 days** | - |
 
 ### Recommended Implementation Order
 
-**Phase 1: Foundation (12.5 days)**
+**Phase 1: Foundation (12.5 days)** - Production Readiness
 - Item 7: Pre-flight validation (2.5 days)
 - Item 10: Authentication support with Kerberos (10 days)
 
-**Phase 2: Extensibility (4 days)**
+**Phase 2: Extensibility (11 days)** - Framework Capabilities
 - Item 8: SDK/Plugin architecture (4 days)
+- Item 11: Test Suites (7 days)
 
-**Phase 3: Scale (9 days)**
+**Phase 3: Scale (9 days)** - Enterprise Features
 - Item 9: Distributed testing (9 days)
 
 ---
@@ -2865,10 +3777,12 @@ public class MyAuthenticatedTask implements Task {
 ---
 
 **Questions for Discussion**:
-1. Should all 4 items be in same release?
-2. What's priority order? (Recommended: 7 → 10 → 8 → 9)
-3. Are we OK with **26 days timeline** (was 22 days, +4 for Kerberos)?
+1. Should all 5 items be in same release?
+2. What's priority order? (Recommended: 7 → 10 → 8 → 11 → 9)
+3. Are we OK with **32 days timeline** (was 26 days, +6 for Test Suites)?
 4. Which credential sources to support first? (Env + AWS recommended)
 5. Any concerns with zero-storage authentication design?
 6. **Kerberos priority**: Do we need keytab + credential cache in first release, or keytab only?
 7. **Target resources**: Which need Kerberos first? (HTTP/Kafka/Database/All?)
+8. **Suite execution**: Should Item 11 come before or after Item 9 (Distributed)?
+9. **Use cases**: Which suite scenarios are most critical for first release?
