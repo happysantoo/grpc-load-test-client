@@ -1,5 +1,5 @@
 // Main dashboard logic
-let currentTest = null;
+window.currentTest = null;
 let statusPollingInterval = null;
 let previousMetrics = null; // Track previous metrics for diagnostics
 
@@ -103,7 +103,7 @@ document.getElementById('testConfigForm').addEventListener('submit', async funct
         const result = await response.json();
         console.log('Test started:', result);
         
-        currentTest = {
+        window.currentTest = {
             testId: result.testId,
             config: config,
             startTime: new Date()
@@ -151,12 +151,12 @@ document.getElementById('testConfigForm').addEventListener('submit', async funct
 
 // Handle stop button
 document.getElementById('stopBtn').addEventListener('click', async function() {
-    if (!currentTest) {
+    if (!window.currentTest) {
         return;
     }
     
     try {
-        const response = await fetch('/api/tests/' + currentTest.testId, {
+        const response = await fetch('/api/tests/' + window.currentTest.testId, {
             method: 'DELETE'
         });
         
@@ -227,17 +227,23 @@ window.updateMetricsDisplay = function updateMetricsDisplay(metrics) {
         console.warn('No latency percentiles in metrics');
     }
     
-    // Update elapsed time
+    // Update elapsed time and determine phase
+    let testPhase = 'RAMP_UP';
     if (currentTest) {
         const elapsed = Math.floor((new Date() - currentTest.startTime) / 1000);
         document.getElementById('elapsedTime').textContent = formatDuration(elapsed);
         
         // Calculate and update test phase
-        updateTestPhase(elapsed, currentTest.config);
+        testPhase = updateTestPhase(elapsed, currentTest.config);
     }
     
     // Update diagnostics panel
     updateDiagnostics(metrics);
+    
+    // Update charts with phase information
+    if (typeof updateCharts === 'function') {
+        updateCharts(metrics, testPhase);
+    }
     
     // Store for next calculation
     previousMetrics = metrics;
@@ -356,7 +362,7 @@ function updateDiagnostics(metrics) {
 function updateTestPhase(elapsedSeconds, config) {
     try {
         const phaseEl = document.getElementById('testPhase');
-        if (!phaseEl || !config) return;
+        if (!phaseEl || !config) return 'RAMP_UP';
         
         const rampStrategy = config.rampStrategyType || 'STEP';
         const sustainDuration = config.sustainDurationSeconds || 0;
@@ -378,22 +384,30 @@ function updateTestPhase(elapsedSeconds, config) {
         }
         
         // Determine current phase
+        let currentPhase = 'RAMP_UP';
+        
         if (elapsedSeconds < rampDuration) {
             const progress = ((elapsedSeconds / rampDuration) * 100).toFixed(0);
             phaseEl.textContent = `Ramp-Up (${progress}%)`;
             phaseEl.className = 'badge bg-primary';
+            currentPhase = 'RAMP_UP';
         } else if (sustainDuration > 0 && elapsedSeconds < (rampDuration + sustainDuration)) {
             const sustainElapsed = elapsedSeconds - rampDuration;
             const remainingSustain = sustainDuration - sustainElapsed;
             phaseEl.textContent = `Sustain (${remainingSustain}s left)`;
             phaseEl.className = 'badge bg-success';
+            currentPhase = 'SUSTAIN';
         } else {
             phaseEl.textContent = 'Completed';
             phaseEl.className = 'badge bg-secondary';
+            currentPhase = 'COMPLETED';
         }
+        
+        return currentPhase;
         
     } catch (error) {
         console.error('Error updating test phase:', error);
+        return 'RAMP_UP';
     }
 }
 
@@ -463,7 +477,7 @@ async function loadActiveTests() {
                     <small class="text-muted">${status}</small>
                 `;
                 item.addEventListener('click', () => {
-                    currentTest = { testId: testId };
+                    window.currentTest = { testId: testId };
                     subscribeToMetrics(testId);
                     document.getElementById('noTestMessage').classList.add('d-none');
                     document.getElementById('metricsPanel').classList.remove('d-none');
