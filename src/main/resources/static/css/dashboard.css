@@ -93,6 +93,20 @@ body {
     font-weight: 800;
     color: #212529;
     line-height: 1.2;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Special styling for badges within metric values */
+.metric-value .badge {
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 8px 12px;
+    white-space: normal;
+    word-wrap: break-word;
+    max-width: 100%;
+    line-height: 1.4;
+    display: inline-block;
 }
 
 /* Color-coded metric values */
@@ -313,6 +327,11 @@ canvas {
 @media (max-width: 768px) {
     .metric-value {
         font-size: 1.5rem;
+    }
+    
+    .metric-value .badge {
+        font-size: 0.85rem;
+        padding: 6px 10px;
     }
     
     .col-md-4, .col-md-8 {
