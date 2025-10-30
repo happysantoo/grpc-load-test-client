@@ -16,6 +16,10 @@ VajraEdge is a modern, high-performance load testing framework built with Java 2
 - Provide sensible defaults, make configuration optional
 - Error messages should be helpful and actionable
 - Documentation should be inline and up-to-date
+- Tests should serve as examples of usage
+- Use descriptive names for test methods
+- Avoid ambiguous or generic names
+- Always start any work on a new branch named after the feature or fix being implemented. Prefer PR ways of merging changes back to main.
 
 
 ### 3. Performance Without Compromise
@@ -246,6 +250,8 @@ com.vajraedge.perftest/
 - Blog articles go under `blog/` folder
 - README.md should always reflect current capabilities
 - Use markdown for all documentation
+- make sure to generate commit messages that explain the changes not more than 4-5 lines max. Bigger commit messages are causing problems.
+
 
 #### Documentation Structure
 ```

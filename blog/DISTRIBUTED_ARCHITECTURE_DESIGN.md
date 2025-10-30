@@ -1,6 +1,5 @@
 # VajraEdge Evolution: From Standalone to Distributed Load Testing
 
-**Author**: Santhosh Kuppusamy  
 **Date**: October 29, 2025  
 **Tags**: #DistributedSystems #LoadTesting #Architecture #gRPC #Security
 
@@ -17,7 +16,7 @@ After establishing VajraEdge as a production-ready load testing framework with J
 - Test suites for complex multi-task scenarios
 - Distributed testing for massive scale
 
-**Timeline**: 32 days (259 hours) of focused development  
+ 
 **Philosophy**: Simplicity, security, and developer experience above all
 
 ---
@@ -94,7 +93,6 @@ Result: BLOCKED - Fix DNS issue before proceeding
 - Detailed HTML reports with remediation suggestions
 - API endpoint: `POST /api/validation`
 
-**Effort**: 20 hours  
 **Value**: Prevents 90% of configuration-related test failures
 
 ---
@@ -192,8 +190,7 @@ java -jar vajraedge.jar
 - **Separation of concerns**: Core framework doesn't bloat with every protocol
 - **Version independence**: Plugins update without framework changes
 - **Innovation**: Developers experiment without permission
-
-**Effort**: 34 hours  
+ 
 **Value**: Enables ecosystem, makes VajraEdge truly extensible
 
 ---
@@ -346,7 +343,6 @@ public class SecureApiTask implements Task {
 }
 ```
 
-**Effort**: 82 hours  
 **Value**: Enterprise-grade auth support without security compromises
 
 ---
@@ -469,8 +465,7 @@ TestScenario scenario = new TestScenario("Mixed Operations")
     .withTaskMix(mix)
     .withConfig(config().targetTps(1000).duration(600).build());
 ```
-
-**Effort**: 54 hours  
+ 
 **Value**: Realistic scenario testing, complex workflows supported
 
 ---
@@ -1009,9 +1004,6 @@ The end result: A framework that's as easy to use as JMeter, as powerful as Gatl
 
 **Stay tuned**: Follow the journey at [github.com/happysantoo/vajraedge](https://github.com/happysantoo/vajraedge)
 
-**Questions?** Open an issue or discussion on GitHub.
-
-**Want to contribute?** We'll be opening bounties for plugin development once Item 8 lands.
 
 ---
 
