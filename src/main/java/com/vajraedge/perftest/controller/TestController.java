@@ -3,6 +3,9 @@ package com.vajraedge.perftest.controller;
 import com.vajraedge.perftest.dto.TestConfigRequest;
 import com.vajraedge.perftest.dto.TestStatusResponse;
 import com.vajraedge.perftest.service.TestExecutionService;
+import com.vajraedge.perftest.validation.PreFlightValidator;
+import com.vajraedge.perftest.validation.ValidationContext;
+import com.vajraedge.perftest.validation.ValidationResult;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,28 +26,58 @@ public class TestController {
     private static final Logger logger = LoggerFactory.getLogger(TestController.class);
     
     private final TestExecutionService testExecutionService;
+    private final PreFlightValidator preFlightValidator;
     
-    public TestController(TestExecutionService testExecutionService) {
+    public TestController(TestExecutionService testExecutionService, PreFlightValidator preFlightValidator) {
         this.testExecutionService = testExecutionService;
+        this.preFlightValidator = preFlightValidator;
     }
     
     /**
      * Start a new performance test.
+     * Performs pre-flight validation before starting the test.
      * 
      * POST /api/tests
      */
     @PostMapping
-    public ResponseEntity<Map<String, String>> startTest(@Valid @RequestBody TestConfigRequest config) {
+    public ResponseEntity<?> startTest(@Valid @RequestBody TestConfigRequest config) {
         logger.info("Received request to start test: {}", config);
         
         try {
+            // Perform pre-flight validation
+            ValidationContext validationContext = ValidationContext.builder()
+                .config(config)
+                .build();
+            
+            ValidationResult validationResult = preFlightValidator.validate(validationContext);
+            logger.info("Pre-flight validation completed: {} - {}", 
+                validationResult.getStatus(), validationResult.getSummary());
+            
+            // If validation failed, return validation results and block test
+            if (validationResult.getStatus() == ValidationResult.Status.FAIL) {
+                logger.warn("Pre-flight validation failed, blocking test execution");
+                Map<String, Object> response = new HashMap<>();
+                response.put("status", "VALIDATION_FAILED");
+                response.put("message", "Pre-flight validation failed - test blocked");
+                response.put("validation", validationResult);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+            
+            // Validation passed or has warnings - proceed with test start
             String testId = testExecutionService.startTest(config);
-            Map<String, String> response = new HashMap<>();
+            Map<String, Object> response = new HashMap<>();
             response.put("testId", testId);
             response.put("status", "RUNNING");
             response.put("message", "Test started successfully");
             
+            // Include validation result if there were warnings
+            if (validationResult.getStatus() == ValidationResult.Status.WARN) {
+                response.put("validation", validationResult);
+                logger.info("Test started with validation warnings: {}", testId);
+            }
+            
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            
         } catch (Exception e) {
             logger.error("Failed to start test", e);
             Map<String, String> error = new HashMap<>();

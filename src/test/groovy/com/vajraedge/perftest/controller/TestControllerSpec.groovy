@@ -3,6 +3,9 @@ package com.vajraedge.perftest.controller
 import com.vajraedge.perftest.dto.TestConfigRequest
 import com.vajraedge.perftest.dto.TestStatusResponse
 import com.vajraedge.perftest.service.TestExecutionService
+import com.vajraedge.perftest.validation.PreFlightValidator
+import com.vajraedge.perftest.validation.ValidationResult
+import com.vajraedge.perftest.validation.CheckResult
 import com.vajraedge.perftest.concurrency.LoadTestMode
 import com.vajraedge.perftest.concurrency.RampStrategyType
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -31,8 +34,19 @@ class TestControllerSpec extends Specification {
     @MockBean
     TestExecutionService testExecutionService
 
+    @MockBean
+    PreFlightValidator preFlightValidator
+
     @Autowired
     ObjectMapper objectMapper
+    
+    def setup() {
+        // Default: validation passes
+        ValidationResult passResult = ValidationResult.builder()
+            .addCheckResult(CheckResult.pass("Default Check", "Passed"))
+            .build()
+        when(preFlightValidator.validate(any())).thenReturn(passResult)
+    }
 
     def "should start test with valid configuration"() {
         given:
@@ -227,5 +241,73 @@ class TestControllerSpec extends Specification {
         0           || "invalid" | "isBadRequest"
         -1          || "invalid" | "isBadRequest"
         50001       || "invalid" | "isBadRequest"
+    }
+    
+    def "should block test when validation fails"() {
+        given:
+        TestConfigRequest request = new TestConfigRequest()
+        request.setMode(LoadTestMode.CONCURRENCY_BASED)
+        request.setStartingConcurrency(10)
+        request.setMaxConcurrency(100)
+        request.setRampStrategyType(RampStrategyType.STEP)
+        request.setRampStep(10)
+        request.setRampIntervalSeconds(30L)
+        request.setTestDurationSeconds(60)
+        
+        // Validation fails
+        ValidationResult failResult = ValidationResult.builder()
+            .addCheckResult(CheckResult.fail("Config Check", "Invalid config", ["Detail"]))
+            .build()
+        when(preFlightValidator.validate(any())).thenReturn(failResult)
+        
+        String requestJson = objectMapper.writeValueAsString(request)
+
+        when:
+        def result = mockMvc.perform(
+            post("/api/tests")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestJson)
+        )
+
+        then:
+        result.andExpect(status().isBadRequest())
+              .andExpect(jsonPath('$.status').value("VALIDATION_FAILED"))
+              .andExpect(jsonPath('$.message').exists())
+              .andExpect(jsonPath('$.validation').exists())
+    }
+    
+    def "should start test with validation warnings"() {
+        given:
+        TestConfigRequest request = new TestConfigRequest()
+        request.setMode(LoadTestMode.CONCURRENCY_BASED)
+        request.setStartingConcurrency(10)
+        request.setMaxConcurrency(100)
+        request.setRampStrategyType(RampStrategyType.STEP)
+        request.setRampStep(10)
+        request.setRampIntervalSeconds(30L)
+        request.setTestDurationSeconds(60)
+        
+        // Validation has warnings
+        ValidationResult warnResult = ValidationResult.builder()
+            .addCheckResult(CheckResult.pass("Check 1", "Passed"))
+            .addCheckResult(CheckResult.warn("Check 2", "Warning", ["Detail"]))
+            .build()
+        when(preFlightValidator.validate(any())).thenReturn(warnResult)
+        when(testExecutionService.startTest(any(TestConfigRequest))).thenReturn("test-with-warnings")
+        
+        String requestJson = objectMapper.writeValueAsString(request)
+
+        when:
+        def result = mockMvc.perform(
+            post("/api/tests")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestJson)
+        )
+
+        then:
+        result.andExpect(status().isCreated())
+              .andExpect(jsonPath('$.testId').value("test-with-warnings"))
+              .andExpect(jsonPath('$.status').value("RUNNING"))
+              .andExpect(jsonPath('$.validation').exists())
     }
 }

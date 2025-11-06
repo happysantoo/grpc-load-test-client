@@ -47,6 +47,286 @@ document.getElementById('taskType').addEventListener('change', function() {
     }
 });
 
+// ========================================
+// PRE-FLIGHT VALIDATION FUNCTIONS
+// ========================================
+
+// Run pre-flight validation checks
+async function runValidation(config) {
+    try {
+        const response = await fetch('/api/validation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(config)
+        });
+        
+        if (!response.ok) {
+            throw new Error('Validation API failed: ' + response.statusText);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Error running validation:', error);
+        throw error;
+    }
+}
+
+// Display validation results in the UI
+function displayValidationResults(validationResult) {
+    const panel = document.getElementById('validationPanel');
+    const progress = document.getElementById('validationProgress');
+    const summary = document.getElementById('validationSummary');
+    const alert = document.getElementById('validationAlert');
+    const icon = document.getElementById('validationIcon');
+    const statusText = document.getElementById('validationStatusText');
+    const summaryText = document.getElementById('validationSummaryText');
+    const checkResults = document.getElementById('checkResults');
+    const actions = document.getElementById('validationActions');
+    
+    // Show panel and hide progress
+    panel.style.display = 'block';
+    progress.style.display = 'none';
+    summary.style.display = 'block';
+    
+    // Set alert styling based on status
+    const status = validationResult.status;
+    alert.className = 'alert mb-3';
+    
+    if (status === 'PASS') {
+        alert.classList.add('alert-validation-pass');
+        icon.textContent = '✅';
+        statusText.textContent = 'All Checks Passed';
+    } else if (status === 'WARN') {
+        alert.classList.add('alert-validation-warn');
+        icon.textContent = '⚠️';
+        statusText.textContent = 'Validation Passed with Warnings';
+    } else { // FAIL
+        alert.classList.add('alert-validation-fail');
+        icon.textContent = '❌';
+        statusText.textContent = 'Validation Failed';
+    }
+    
+    // Set summary text
+    const checks = validationResult.checkResults || [];
+    const passCount = checks.filter(c => c.status === 'PASS').length;
+    const warnCount = checks.filter(c => c.status === 'WARN').length;
+    const failCount = checks.filter(c => c.status === 'FAIL').length;
+    const skipCount = checks.filter(c => c.status === 'SKIP').length;
+    
+    let summaryParts = [];
+    if (passCount > 0) summaryParts.push(`${passCount} passed`);
+    if (warnCount > 0) summaryParts.push(`${warnCount} warnings`);
+    if (failCount > 0) summaryParts.push(`${failCount} failed`);
+    if (skipCount > 0) summaryParts.push(`${skipCount} skipped`);
+    
+    summaryText.textContent = `${checks.length} checks completed: ${summaryParts.join(', ')}`;
+    
+    // Display individual check results
+    checkResults.innerHTML = '';
+    checks.forEach((check, index) => {
+        const checkItem = createCheckResultElement(check, index);
+        checkResults.appendChild(checkItem);
+    });
+    
+    // Display action buttons based on status
+    actions.innerHTML = '';
+    
+    if (status === 'FAIL') {
+        actions.innerHTML = `
+            <div class="d-grid gap-2">
+                <button type="button" class="btn btn-danger" disabled>
+                    ❌ Cannot Start Test - Fix Issues First
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="hideValidationPanel()">
+                    Close
+                </button>
+            </div>
+        `;
+    } else if (status === 'WARN') {
+        actions.innerHTML = `
+            <div class="d-grid gap-2">
+                <button type="button" class="btn btn-warning" onclick="proceedWithTest()">
+                    ⚠️ Proceed Anyway
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="hideValidationPanel()">
+                    Cancel
+                </button>
+            </div>
+        `;
+    } else { // PASS
+        actions.innerHTML = `
+            <div class="d-grid gap-2">
+                <button type="button" class="btn btn-success" onclick="proceedWithTest()">
+                    ✅ Start Test
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="hideValidationPanel()">
+                    Cancel
+                </button>
+            </div>
+        `;
+    }
+}
+
+// Create HTML element for a single check result
+function createCheckResultElement(check, index) {
+    const div = document.createElement('div');
+    div.className = `validation-check-item status-${check.status.toLowerCase()}`;
+    div.id = `check-${index}`;
+    
+    // Get icon based on status
+    let icon = '✅';
+    if (check.status === 'WARN') icon = '⚠️';
+    else if (check.status === 'FAIL') icon = '❌';
+    else if (check.status === 'SKIP') icon = '⏭️';
+    
+    // Format duration
+    const duration = check.durationMs ? `${check.durationMs}ms` : '';
+    
+    // Create header (always visible)
+    const header = document.createElement('div');
+    header.className = 'validation-check-header';
+    header.innerHTML = `
+        <span class="validation-check-icon">${icon}</span>
+        <span class="validation-check-name">${check.checkName}</span>
+        ${duration ? `<span class="validation-check-duration">${duration}</span>` : ''}
+        ${check.details && check.details.length > 0 ? '<span class="validation-check-toggle">▼</span>' : ''}
+    `;
+    
+    // Create message (always visible)
+    const message = document.createElement('div');
+    message.className = 'validation-check-message';
+    message.textContent = check.message;
+    
+    // Create collapsible details section (if details exist)
+    const details = document.createElement('div');
+    details.className = 'validation-check-details';
+    
+    if (check.details && check.details.length > 0) {
+        const ul = document.createElement('ul');
+        check.details.forEach(detail => {
+            const li = document.createElement('li');
+            li.textContent = detail;
+            ul.appendChild(li);
+        });
+        details.appendChild(ul);
+        
+        // Add click handler to toggle details
+        header.style.cursor = 'pointer';
+        header.addEventListener('click', () => {
+            details.classList.toggle('show');
+            const toggle = header.querySelector('.validation-check-toggle');
+            if (toggle) {
+                toggle.classList.toggle('expanded');
+            }
+        });
+    }
+    
+    div.appendChild(header);
+    div.appendChild(message);
+    if (check.details && check.details.length > 0) {
+        div.appendChild(details);
+    }
+    
+    return div;
+}
+
+// Show validation progress
+function showValidationProgress() {
+    const panel = document.getElementById('validationPanel');
+    const progress = document.getElementById('validationProgress');
+    const summary = document.getElementById('validationSummary');
+    
+    panel.style.display = 'block';
+    progress.style.display = 'block';
+    summary.style.display = 'none';
+}
+
+// Hide validation panel
+window.hideValidationPanel = function() {
+    document.getElementById('validationPanel').style.display = 'none';
+};
+
+// Proceed with test start (called from validation action buttons)
+window.proceedWithTest = async function() {
+    hideValidationPanel();
+    
+    // Re-enable start button and trigger actual test start
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('startSpinner').classList.remove('d-none');
+    
+    // Call the actual test start function
+    await startTestExecution(window.pendingTestConfig);
+};
+
+// Actual test start logic (extracted from form handler)
+async function startTestExecution(config) {
+    try {
+        const response = await fetch('/api/tests', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(config)
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to start test: ' + response.statusText);
+        }
+        
+        const result = await response.json();
+        console.log('Test started:', result);
+        
+        window.currentTest = {
+            testId: result.testId,
+            config: config,
+            startTime: new Date()
+        };
+        
+        // Show metrics panel
+        document.getElementById('noTestMessage').classList.add('d-none');
+        document.getElementById('metricsPanel').classList.remove('d-none');
+        
+        // Initialize or resize charts
+        console.log('Metrics panel now visible, initializing charts...');
+        if (!window.tpsChart || !window.latencyChart) {
+            initializeCharts();
+        } else {
+            window.tpsChart.resize();
+            window.latencyChart.resize();
+        }
+        
+        // Update UI
+        document.getElementById('currentTestId').textContent = result.testId;
+        document.getElementById('testStatus').textContent = 'RUNNING';
+        document.getElementById('stopBtn').disabled = false;
+        
+        // Reset charts
+        resetCharts();
+        
+        // Subscribe to WebSocket updates
+        subscribeToMetrics(result.testId);
+        
+        // Start polling for status updates
+        startStatusPolling(result.testId);
+        
+        // Load active tests
+        loadActiveTests();
+        
+    } catch (error) {
+        console.error('Error starting test:', error);
+        alert('Failed to start test: ' + error.message);
+    } finally {
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('startSpinner').classList.add('d-none');
+    }
+}
+
+// ========================================
+// FORM SUBMISSION HANDLER (WITH VALIDATION)
+// ========================================
+
 // Handle form submission to start a test
 document.getElementById('testConfigForm').addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -88,61 +368,42 @@ document.getElementById('testConfigForm').addEventListener('submit', async funct
         document.getElementById('startBtn').disabled = true;
         document.getElementById('startSpinner').classList.remove('d-none');
         
-        const response = await fetch('/api/tests', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(config)
-        });
+        // Store config for later use if validation passes with warnings
+        window.pendingTestConfig = config;
         
-        if (!response.ok) {
-            throw new Error('Failed to start test: ' + response.statusText);
+        // Step 1: Run pre-flight validation
+        console.log('Running pre-flight validation...');
+        showValidationProgress();
+        
+        const validationResult = await runValidation(config);
+        console.log('Validation result:', validationResult);
+        
+        // Step 2: Display validation results
+        displayValidationResults(validationResult);
+        
+        // Step 3: Handle validation status
+        if (validationResult.status === 'FAIL') {
+            // Validation failed - do not start test
+            console.log('Validation failed, test blocked');
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('startSpinner').classList.add('d-none');
+            return; // Stop here, user must fix issues
         }
         
-        const result = await response.json();
-        console.log('Test started:', result);
-        
-        window.currentTest = {
-            testId: result.testId,
-            config: config,
-            startTime: new Date()
-        };
-        
-        // Show metrics panel
-        document.getElementById('noTestMessage').classList.add('d-none');
-        document.getElementById('metricsPanel').classList.remove('d-none');
-        
-        // Initialize or resize charts now that panel is visible
-        console.log('Metrics panel now visible, initializing charts...');
-        if (!window.tpsChart || !window.latencyChart) {
-            // Charts not initialized yet, do it now
-            initializeCharts();
-        } else {
-            // Charts exist but might need resizing
-            window.tpsChart.resize();
-            window.latencyChart.resize();
+        if (validationResult.status === 'WARN') {
+            // Validation passed with warnings - wait for user decision
+            console.log('Validation passed with warnings, waiting for user decision');
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('startSpinner').classList.add('d-none');
+            return; // User will click "Proceed Anyway" button if they want to continue
         }
         
-        // Update UI
-        document.getElementById('currentTestId').textContent = result.testId;
-        document.getElementById('testStatus').textContent = 'RUNNING';
-        document.getElementById('stopBtn').disabled = false;
-        
-        // Reset charts
-        resetCharts();
-        
-        // Subscribe to WebSocket updates
-        subscribeToMetrics(result.testId);
-        
-        // Start polling for status updates (fallback if WebSocket fails)
-        startStatusPolling(result.testId);
-        
-        // Load active tests
-        loadActiveTests();
+        // Step 4: Validation passed - proceed automatically
+        console.log('Validation passed, proceeding with test start');
+        await startTestExecution(config);
         
     } catch (error) {
-        console.error('Error starting test:', error);
+        console.error('Error during test start process:', error);
         alert('Failed to start test: ' + error.message);
         document.getElementById('startBtn').disabled = false;
         document.getElementById('startSpinner').classList.add('d-none');

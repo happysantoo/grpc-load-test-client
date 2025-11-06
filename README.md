@@ -32,6 +32,171 @@ VajraEdge is a modern, production-ready performance testing framework built with
 - 🔌 **WebSocket Updates**: No polling, instant metrics via STOMP over WebSocket
 - 🧩 **Simple Task Interface**: Benchmark anything by implementing one method
 - 🎨 **Modern UI**: Bootstrap 5 + Chart.js with responsive design
+- 🔍 **Pre-Flight Validation**: Automatic system health checks before test execution
+
+## 🔍 Pre-Flight Validation
+
+VajraEdge includes intelligent pre-flight validation that automatically checks your system before running tests. This prevents test failures and provides actionable feedback.
+
+### What Gets Validated?
+
+**Service Health Check** ✅
+- Verifies Spring Boot application is fully started
+- Ensures WebSocket endpoint is available
+- Confirms all required services are healthy
+
+**Configuration Check** ⚙️
+- Validates test parameters are within safe limits
+- Maximum concurrency: 50,000 tasks
+- Maximum TPS: 100,000 requests/second
+- Test duration: 1 second to 24 hours
+- Checks for reasonable ramp-up duration relative to test length
+
+**Resource Check** 💾
+- Monitors available system memory
+- Warns if less than 500MB free heap space
+- Suggests increasing JVM memory if needed
+
+**Network Check** 🌐
+- For HTTP tasks: validates URL format
+- Tests connectivity to target endpoint
+- Warns if endpoint is unreachable or slow
+
+### Validation Results
+
+**PASS** ✅ - All checks passed, test will start automatically
+**WARN** ⚠️ - Minor issues detected, you can proceed with confirmation
+**FAIL** ❌ - Critical issues found, test is blocked until fixed
+
+### Using Validation in the UI
+
+1. Configure your test parameters in the dashboard
+2. Click "Start Test"
+3. Validation runs automatically (progress spinner shown)
+4. Review the validation results panel:
+   - Overall status with color-coded alert
+   - Individual check results with expandable details
+   - Action buttons based on status
+
+**If validation passes**: Test starts automatically
+**If warnings detected**: Review warnings and click "Proceed Anyway" if acceptable
+**If validation fails**: Fix the issues and try again
+
+### Validation API
+
+You can also run validation independently via REST API:
+
+```bash
+curl -X POST http://localhost:8080/api/validation \
+  -H "Content-Type: application/json" \
+  -d '{
+    "targetTps": 1000,
+    "maxConcurrency": 100,
+    "testDurationSeconds": 60,
+    "rampUpDurationSeconds": 10,
+    "taskType": "SLEEP",
+    "taskParameter": 100
+  }'
+```
+
+**Response** (status=PASS):
+```json
+{
+  "status": "PASS",
+  "canProceed": true,
+  "summary": "All validation checks passed successfully",
+  "checkResults": [
+    {
+      "checkName": "Service Health Check",
+      "status": "PASS",
+      "message": "All services are healthy and ready",
+      "details": ["Spring Boot application: HEALTHY", "WebSocket endpoint: AVAILABLE"],
+      "durationMs": 45
+    },
+    {
+      "checkName": "Configuration Check",
+      "status": "PASS",
+      "message": "Test configuration is valid",
+      "details": ["Concurrency: 100 (within limit of 50000)", "TPS: 1000 (within limit of 100000)"],
+      "durationMs": 12
+    }
+  ]
+}
+```
+
+**Response** (status=WARN):
+```json
+{
+  "status": "WARN",
+  "canProceed": true,
+  "summary": "Validation passed with warnings. Review before proceeding.",
+  "checkResults": [
+    {
+      "checkName": "Resource Check",
+      "status": "WARN",
+      "message": "Available heap memory is below recommended threshold",
+      "details": ["Free heap: 350MB", "Recommended: 500MB+", "Consider increasing JVM memory"],
+      "durationMs": 8
+    }
+  ]
+}
+```
+
+**Response** (status=FAIL):
+```json
+{
+  "status": "FAIL",
+  "canProceed": false,
+  "summary": "Validation failed. Fix critical issues before proceeding.",
+  "checkResults": [
+    {
+      "checkName": "Configuration Check",
+      "status": "FAIL",
+      "message": "Test configuration exceeds system limits",
+      "details": ["Max concurrency 100000 exceeds limit of 50000", "Reduce maxConcurrency parameter"],
+      "durationMs": 5
+    }
+  ]
+}
+```
+
+### Validation Limits
+
+| Parameter | Minimum | Maximum | Recommendation |
+|-----------|---------|---------|----------------|
+| Concurrency | 1 | 50,000 | Start with 10-100 |
+| Target TPS | 1 | 100,000 | Depends on task latency |
+| Test Duration | 1 second | 24 hours | 60-300 seconds typical |
+| Ramp-Up Duration | 0 seconds | Test duration | 10-20% of test duration |
+| Available Heap | 500MB+ | - | 1GB+ recommended |
+
+### Adding Custom Validation Checks
+
+You can add your own validation checks by implementing the `ValidationCheck` interface:
+
+```java
+@Component
+public class CustomCheck implements ValidationCheck {
+    
+    @Override
+    public CheckResult validate(ValidationContext context) {
+        // Your validation logic here
+        TestConfigRequest config = context.getConfig();
+        
+        if (/* some condition */) {
+            return CheckResult.fail(
+                "Custom Check",
+                "Check failed: reason",
+                List.of("Detail 1", "Detail 2")
+            );
+        }
+        
+        return CheckResult.pass("Custom Check", "Check passed");
+    }
+}
+```
+
+The framework will automatically discover and run your check.
 
 ## 🏃 Quick Start
 
@@ -116,6 +281,30 @@ Task: SLEEP (50ms)
 
 ## 🧪 REST API
 
+### Run Pre-Flight Validation (Recommended First)
+```bash
+curl -X POST http://localhost:8080/api/validation \
+  -H "Content-Type: application/json" \
+  -d '{
+    "targetTps": 100,
+    "maxConcurrency": 50,
+    "testDurationSeconds": 60,
+    "rampUpDurationSeconds": 10,
+    "taskType": "SLEEP",
+    "taskParameter": 100
+  }'
+```
+
+**Response**:
+```json
+{
+  "status": "PASS",
+  "canProceed": true,
+  "summary": "All validation checks passed successfully",
+  "checkResults": [...]
+}
+```
+
 ### Start a Test
 ```bash
 curl -X POST http://localhost:8080/api/tests \
@@ -129,6 +318,8 @@ curl -X POST http://localhost:8080/api/tests \
     "taskParameter": 100
   }'
 ```
+
+**Note**: Pre-flight validation runs automatically before test start. Tests with FAIL status are blocked.
 
 ### Get Test Status
 ```bash
@@ -248,7 +439,8 @@ src/main/java/com/vajraedge/perftest/
 │   └── WebSocketConfig.java
 ├── controller/                      # REST endpoints
 │   ├── HealthController.java
-│   └── TestController.java
+│   ├── TestController.java
+│   └── ValidationController.java
 ├── core/                           # Framework core
 │   ├── Task.java                   # Task interface
 │   ├── TaskResult.java
@@ -273,6 +465,17 @@ src/main/java/com/vajraedge/perftest/
 ├── service/                       # Business logic
 │   ├── TestExecutionService.java
 │   └── MetricsService.java
+├── validation/                    # Pre-flight validation
+│   ├── CheckResult.java          # Individual check result
+│   ├── ValidationCheck.java      # Validation check interface
+│   ├── ValidationContext.java    # Validation context wrapper
+│   ├── ValidationResult.java     # Overall validation result
+│   ├── PreFlightValidator.java   # Validation orchestrator
+│   └── checks/                   # Validation check implementations
+│       ├── ConfigurationCheck.java
+│       ├── NetworkCheck.java
+│       ├── ResourceCheck.java
+│       └── ServiceHealthCheck.java
 └── websocket/                     # WebSocket handling
     └── MetricsWebSocketHandler.java
 

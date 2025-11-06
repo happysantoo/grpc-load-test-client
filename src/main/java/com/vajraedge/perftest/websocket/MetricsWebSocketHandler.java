@@ -3,7 +3,7 @@ package com.vajraedge.perftest.websocket;
 import com.vajraedge.perftest.dto.MetricsResponse;
 import com.vajraedge.perftest.service.MetricsService;
 import com.vajraedge.perftest.service.TestExecutionService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -21,16 +21,16 @@ public class MetricsWebSocketHandler {
     private final SimpMessagingTemplate messagingTemplate;
     private final TestExecutionService testExecutionService;
     private final MetricsService metricsService;
-    private final ObjectMapper objectMapper;
+   
     
     public MetricsWebSocketHandler(SimpMessagingTemplate messagingTemplate,
                                    TestExecutionService testExecutionService,
-                                   MetricsService metricsService,
-                                   ObjectMapper objectMapper) {
+                                   MetricsService metricsService
+                                   ) {
         this.messagingTemplate = messagingTemplate;
         this.testExecutionService = testExecutionService;
         this.metricsService = metricsService;
-        this.objectMapper = objectMapper;
+        
         logger.info("MetricsWebSocketHandler initialized");
     }
     
