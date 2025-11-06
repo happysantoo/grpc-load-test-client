@@ -115,16 +115,13 @@
                             <div class="mb-3">
                                 <label for="taskType" class="form-label">Task Type</label>
                                 <select class="form-select" id="taskType" required>
-                                    <option value="SLEEP">Sleep Task</option>
-                                    <option value="CPU">CPU Task</option>
-                                    <option value="HTTP">HTTP Request</option>
+                                    <option value="">Loading plugins...</option>
                                 </select>
                             </div>
                             
-                            <div class="mb-3">
-                                <label for="taskParameter" class="form-label">Task Parameter</label>
-                                <input type="text" class="form-control" id="taskParameter" value="100" required>
-                                <div class="form-text" id="taskParameterHelp">Sleep/CPU duration in ms</div>
+                            <!-- Dynamic task parameters container -->
+                            <div id="taskParametersContainer">
+                                <!-- Parameter fields will be dynamically inserted here -->
                             </div>
                             
                             <div class="d-grid gap-2">

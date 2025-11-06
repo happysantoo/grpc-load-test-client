@@ -2,6 +2,80 @@
 window.currentTest = null;
 let statusPollingInterval = null;
 let previousMetrics = null; // Track previous metrics for diagnostics
+let availablePlugins = {}; // Store loaded plugins
+
+// Load available plugins on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadAvailablePlugins();
+});
+
+async function loadAvailablePlugins() {
+    try {
+        const response = await fetch('/api/tests/plugins');
+        if (!response.ok) {
+            console.error('Failed to load plugins:', response.statusText);
+            return;
+        }
+        
+        const data = await response.json();
+        availablePlugins = data.plugins;
+        
+        // Populate task type dropdown
+        populateTaskTypeDropdown();
+        
+        console.log('Loaded', data.totalCount, 'plugins');
+    } catch (error) {
+        console.error('Error loading plugins:', error);
+    }
+}
+
+function populateTaskTypeDropdown() {
+    const taskTypeSelect = document.getElementById('taskType');
+    taskTypeSelect.innerHTML = ''; // Clear existing options
+    
+    // Add plugins grouped by category
+    for (const [category, plugins] of Object.entries(availablePlugins)) {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = category;
+        
+        plugins.forEach(plugin => {
+            const option = document.createElement('option');
+            option.value = plugin.name;
+            option.textContent = plugin.displayName;
+            option.setAttribute('data-plugin', JSON.stringify(plugin));
+            optgroup.appendChild(option);
+        });
+        
+        taskTypeSelect.appendChild(optgroup);
+    }
+    
+    // Add legacy hard-coded tasks if plugins don't cover them
+    const legacyGroup = document.createElement('optgroup');
+    legacyGroup.label = 'LEGACY';
+    
+    const hasHttpGet = Object.values(availablePlugins).flat().some(p => p.name === 'HTTP_GET');
+    const hasSleep = Object.values(availablePlugins).flat().some(p => p.name === 'SLEEP');
+    
+    if (!hasSleep) {
+        legacyGroup.appendChild(createOption('SLEEP', 'Sleep Task (Legacy)'));
+    }
+    legacyGroup.appendChild(createOption('CPU', 'CPU Task'));
+    if (!hasHttpGet) {
+        legacyGroup.appendChild(createOption('HTTP', 'HTTP Request (Legacy)'));
+    }
+    
+    taskTypeSelect.appendChild(legacyGroup);
+    
+    // Trigger change event to update parameter fields
+    taskTypeSelect.dispatchEvent(new Event('change'));
+}
+
+function createOption(value, text) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = text;
+    return option;
+}
 
 // Handle test mode change
 document.getElementById('testMode').addEventListener('change', function() {
@@ -14,6 +88,126 @@ document.getElementById('testMode').addEventListener('change', function() {
         tpsLimitField.classList.add('d-none');
     }
 });
+
+// Handle task type change to show dynamic parameters
+document.getElementById('taskType').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    const pluginData = selectedOption.getAttribute('data-plugin');
+    
+    if (pluginData) {
+        const plugin = JSON.parse(pluginData);
+        renderPluginParameters(plugin);
+    } else {
+        renderLegacyParameters(this.value);
+    }
+});
+
+function renderPluginParameters(plugin) {
+    const container = document.getElementById('taskParametersContainer');
+    container.innerHTML = ''; // Clear existing fields
+    
+    if (!plugin.parameters || plugin.parameters.length === 0) {
+        return;
+    }
+    
+    plugin.parameters.forEach(param => {
+        const fieldGroup = document.createElement('div');
+        fieldGroup.className = 'mb-3';
+        
+        const label = document.createElement('label');
+        label.className = 'form-label';
+        label.textContent = param.description || param.name;
+        if (param.required) {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-danger ms-1';
+            badge.textContent = 'Required';
+            label.appendChild(badge);
+        }
+        fieldGroup.appendChild(label);
+        
+        let input;
+        if (param.type === 'INTEGER') {
+            input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'form-control';
+            input.id = 'param_' + param.name;
+            input.name = param.name;
+            input.required = param.required;
+            if (param.defaultValue !== null && param.defaultValue !== undefined) {
+                input.value = param.defaultValue;
+            }
+            if (param.minValue !== null) input.min = param.minValue;
+            if (param.maxValue !== null) input.max = param.maxValue;
+        } else if (param.type === 'BOOLEAN') {
+            input = document.createElement('select');
+            input.className = 'form-select';
+            input.id = 'param_' + param.name;
+            input.name = param.name;
+            input.required = param.required;
+            input.innerHTML = `
+                <option value="true" ${param.defaultValue === true ? 'selected' : ''}>True</option>
+                <option value="false" ${param.defaultValue === false ? 'selected' : ''}>False</option>
+            `;
+        } else {
+            input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control';
+            input.id = 'param_' + param.name;
+            input.name = param.name;
+            input.required = param.required;
+            if (param.defaultValue !== null && param.defaultValue !== undefined) {
+                input.value = param.defaultValue;
+            }
+            if (param.validationPattern) {
+                input.pattern = param.validationPattern;
+            }
+        }
+        
+        fieldGroup.appendChild(input);
+        
+        // Add help text
+        if (param.description) {
+            const helpText = document.createElement('div');
+            helpText.className = 'form-text';
+            helpText.textContent = param.description;
+            fieldGroup.appendChild(helpText);
+        }
+        
+        container.appendChild(fieldGroup);
+    });
+}
+
+function renderLegacyParameters(taskType) {
+    const container = document.getElementById('taskParametersContainer');
+    container.innerHTML = '';
+    
+    if (taskType === 'SLEEP') {
+        container.innerHTML = `
+            <div class="mb-3">
+                <label for="param_duration" class="form-label">Sleep Duration (ms)</label>
+                <input type="number" class="form-control" id="param_duration" name="duration" 
+                       value="100" min="1" max="60000" required>
+                <div class="form-text">Duration to sleep in milliseconds</div>
+            </div>
+        `;
+    } else if (taskType === 'HTTP') {
+        container.innerHTML = `
+            <div class="mb-3">
+                <label for="param_url" class="form-label">URL</label>
+                <input type="url" class="form-control" id="param_url" name="url" 
+                       value="http://localhost:8080/actuator/health" required>
+                <div class="form-text">Target URL for HTTP requests</div>
+            </div>
+        `;
+    } else if (taskType === 'CPU') {
+        // CPU task has no parameters
+        container.innerHTML = `
+            <div class="alert alert-info">
+                <small>CPU task has no configurable parameters</small>
+            </div>
+        `;
+    }
+}
 
 // Handle ramp strategy change
 document.getElementById('rampStrategy').addEventListener('change', function() {
@@ -30,22 +224,172 @@ document.getElementById('rampStrategy').addEventListener('change', function() {
     }
 });
 
-// Update task parameter help text based on task type
+// Update task parameter fields based on selected task type
 document.getElementById('taskType').addEventListener('change', function() {
     const taskType = this.value;
-    const taskParameterInput = document.getElementById('taskParameter');
-    const helpText = document.getElementById('taskParameterHelp');
+    const selectedOption = this.options[this.selectedIndex];
+    const pluginData = selectedOption.getAttribute('data-plugin');
     
-    if (taskType === 'HTTP') {
-        taskParameterInput.value = 'http://localhost:8081/api/products';
-        taskParameterInput.type = 'text';
-        helpText.textContent = 'URL to test (e.g., http://localhost:8081/api/products)';
+    if (pluginData) {
+        // Plugin-based task - render dynamic parameter fields
+        const plugin = JSON.parse(pluginData);
+        renderPluginParameterFields(plugin);
     } else {
-        taskParameterInput.value = '100';
-        taskParameterInput.type = 'number';
-        helpText.textContent = 'Sleep/CPU duration in ms';
+        // Legacy hard-coded task - use simple parameter field
+        renderLegacyParameterField(taskType);
     }
 });
+
+function renderPluginParameterFields(plugin) {
+    const container = document.getElementById('taskParametersContainer');
+    container.innerHTML = ''; // Clear existing fields
+    
+    if (!plugin.parameters || plugin.parameters.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No parameters required</div>';
+        return;
+    }
+    
+    plugin.parameters.forEach(param => {
+        const fieldGroup = document.createElement('div');
+        fieldGroup.className = 'mb-3';
+        
+        const label = document.createElement('label');
+        label.className = 'form-label';
+        label.htmlFor = 'param_' + param.name;
+        label.textContent = param.name;
+        
+        if (param.required) {
+            const requiredBadge = document.createElement('span');
+            requiredBadge.className = 'badge bg-danger ms-1';
+            requiredBadge.textContent = 'Required';
+            label.appendChild(requiredBadge);
+        }
+        
+        const input = createInputForParameter(param);
+        input.id = 'param_' + param.name;
+        input.setAttribute('data-param-name', param.name);
+        
+        const helpText = document.createElement('div');
+        helpText.className = 'form-text';
+        helpText.textContent = param.description || '';
+        
+        fieldGroup.appendChild(label);
+        fieldGroup.appendChild(input);
+        fieldGroup.appendChild(helpText);
+        container.appendChild(fieldGroup);
+    });
+}
+
+function createInputForParameter(param) {
+    let input;
+    
+    switch (param.type) {
+        case 'INTEGER':
+            input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'form-control';
+            input.value = param.defaultValue || '';
+            if (param.minValue !== null) input.min = param.minValue;
+            if (param.maxValue !== null) input.max = param.maxValue;
+            input.required = param.required;
+            break;
+            
+        case 'BOOLEAN':
+            input = document.createElement('select');
+            input.className = 'form-select';
+            input.innerHTML = '<option value="true">True</option><option value="false">False</option>';
+            input.value = param.defaultValue || 'false';
+            input.required = param.required;
+            break;
+            
+        case 'STRING':
+        default:
+            input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control';
+            input.value = param.defaultValue || '';
+            if (param.validationPattern) {
+                input.pattern = param.validationPattern;
+            }
+            input.required = param.required;
+            break;
+    }
+    
+    return input;
+}
+
+function renderLegacyParameterField(taskType) {
+    const container = document.getElementById('taskParametersContainer');
+    container.innerHTML = '';
+    
+    const fieldGroup = document.createElement('div');
+    fieldGroup.className = 'mb-3';
+    
+    const label = document.createElement('label');
+    label.className = 'form-label';
+    label.htmlFor = 'taskParameter';
+    label.textContent = 'Task Parameter';
+    
+    const input = document.createElement('input');
+    input.id = 'taskParameter';
+    input.className = 'form-control';
+    
+    const helpText = document.createElement('div');
+    helpText.className = 'form-text';
+    helpText.id = 'taskParameterHelp';
+    
+    if (taskType === 'HTTP') {
+        input.value = 'http://localhost:8081/api/products';
+        input.type = 'text';
+        helpText.textContent = 'URL to test (e.g., http://localhost:8081/api/products)';
+    } else {
+        input.value = '100';
+        input.type = 'number';
+        helpText.textContent = 'Sleep/CPU duration in ms';
+    }
+    
+    input.required = true;
+    
+    fieldGroup.appendChild(label);
+    fieldGroup.appendChild(input);
+    fieldGroup.appendChild(helpText);
+    container.appendChild(fieldGroup);
+}
+
+function collectTaskParameters() {
+    const container = document.getElementById('taskParametersContainer');
+    const paramInputs = container.querySelectorAll('input, select, textarea');
+    
+    if (paramInputs.length === 0) {
+        return null; // No parameters configured
+    }
+    
+    // Collect all parameters into a map
+    const parameters = {};
+    paramInputs.forEach(input => {
+        if (!input.name) return; // Skip inputs without name attribute
+        
+        const paramName = input.name;
+        let value = input.value;
+        
+        // Convert to appropriate type based on input type
+        if (input.type === 'number') {
+            value = input.value ? parseInt(input.value) : null;
+        } else if (input.type === 'checkbox') {
+            value = input.checked;
+        } else if (input.tagName === 'SELECT' && (value === 'true' || value === 'false')) {
+            value = value === 'true';
+        }
+        
+        if (value !== null && value !== '') {
+            parameters[paramName] = value;
+        }
+    });
+    
+    // Return map if we have parameters, otherwise null
+    return Object.keys(parameters).length > 0 ? parameters : null;
+    return parameters;
+}
 
 // ========================================
 // PRE-FLIGHT VALIDATION FUNCTIONS
@@ -332,7 +676,7 @@ document.getElementById('testConfigForm').addEventListener('submit', async funct
     e.preventDefault();
     
     const taskType = document.getElementById('taskType').value;
-    const taskParameterValue = document.getElementById('taskParameter').value;
+    const taskParameter = collectTaskParameters();
     const testMode = document.getElementById('testMode').value;
     const rampStrategy = document.getElementById('rampStrategy').value;
     
@@ -345,7 +689,7 @@ document.getElementById('testConfigForm').addEventListener('submit', async funct
         testDurationSeconds: parseInt(document.getElementById('testDuration').value),
         sustainDurationSeconds: parseInt(document.getElementById('sustainDuration').value) || 0,
         taskType: taskType,
-        taskParameter: taskType === 'HTTP' ? taskParameterValue : parseInt(taskParameterValue)
+        taskParameter: taskParameter
     };
     
     // Add strategy-specific fields
