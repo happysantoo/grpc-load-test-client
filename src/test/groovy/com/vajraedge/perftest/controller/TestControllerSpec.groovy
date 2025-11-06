@@ -2,6 +2,7 @@ package com.vajraedge.perftest.controller
 
 import com.vajraedge.perftest.dto.TestConfigRequest
 import com.vajraedge.perftest.dto.TestStatusResponse
+import com.vajraedge.perftest.sdk.plugin.PluginRegistry
 import com.vajraedge.perftest.service.TestExecutionService
 import com.vajraedge.perftest.validation.PreFlightValidator
 import com.vajraedge.perftest.validation.ValidationResult
@@ -36,6 +37,9 @@ class TestControllerSpec extends Specification {
 
     @MockBean
     PreFlightValidator preFlightValidator
+    
+    @MockBean
+    PluginRegistry pluginRegistry
 
     @Autowired
     ObjectMapper objectMapper

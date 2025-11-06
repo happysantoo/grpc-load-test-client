@@ -2,6 +2,8 @@ package com.vajraedge.perftest.controller;
 
 import com.vajraedge.perftest.dto.TestConfigRequest;
 import com.vajraedge.perftest.dto.TestStatusResponse;
+import com.vajraedge.perftest.sdk.plugin.PluginInfo;
+import com.vajraedge.perftest.sdk.plugin.PluginRegistry;
 import com.vajraedge.perftest.service.TestExecutionService;
 import com.vajraedge.perftest.validation.PreFlightValidator;
 import com.vajraedge.perftest.validation.ValidationContext;
@@ -27,10 +29,14 @@ public class TestController {
     
     private final TestExecutionService testExecutionService;
     private final PreFlightValidator preFlightValidator;
+    private final PluginRegistry pluginRegistry;
     
-    public TestController(TestExecutionService testExecutionService, PreFlightValidator preFlightValidator) {
+    public TestController(TestExecutionService testExecutionService, 
+                         PreFlightValidator preFlightValidator,
+                         PluginRegistry pluginRegistry) {
         this.testExecutionService = testExecutionService;
         this.preFlightValidator = preFlightValidator;
+        this.pluginRegistry = pluginRegistry;
     }
     
     /**
@@ -165,5 +171,41 @@ public class TestController {
             error.put("testId", id);
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
         }
+    }
+    
+    /**
+     * List all available task plugins.
+     * 
+     * GET /api/tests/plugins
+     */
+    @GetMapping("/plugins")
+    public ResponseEntity<Map<String, Object>> listPlugins() {
+        logger.debug("Listing all available plugins");
+        
+        var allPlugins = pluginRegistry.getAllPlugins();
+        
+        // Group plugins by category
+        Map<String, java.util.List<Map<String, Object>>> pluginsByCategory = new HashMap<>();
+        
+        for (PluginInfo plugin : allPlugins.values()) {
+            String category = plugin.getCategory();
+            
+            Map<String, Object> pluginData = new HashMap<>();
+            pluginData.put("name", plugin.getName());
+            pluginData.put("displayName", plugin.getDisplayName());
+            pluginData.put("description", plugin.metadata().description());
+            pluginData.put("version", plugin.version());
+            pluginData.put("author", plugin.author());
+            pluginData.put("parameters", plugin.metadata().parameters());
+            pluginData.put("metadata", plugin.metadata().metadata());
+            
+            pluginsByCategory.computeIfAbsent(category, k -> new java.util.ArrayList<>()).add(pluginData);
+        }
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("plugins", pluginsByCategory);
+        response.put("totalCount", allPlugins.size());
+        
+        return ResponseEntity.ok(response);
     }
 }

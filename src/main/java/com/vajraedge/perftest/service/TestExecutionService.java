@@ -15,6 +15,8 @@ import com.vajraedge.perftest.metrics.MetricsCollector;
 import com.vajraedge.perftest.runner.ConcurrencyBasedTestRunner;
 import com.vajraedge.perftest.runner.PerformanceTestRunner;
 import com.vajraedge.perftest.runner.TestResult;
+import com.vajraedge.perftest.sdk.TaskPlugin;
+import com.vajraedge.perftest.sdk.plugin.PluginRegistry;
 import com.vajraedge.perftest.task.HttpTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,8 +38,13 @@ public class TestExecutionService {
     private static final Logger logger = LoggerFactory.getLogger(TestExecutionService.class);
     private static final int MAX_CONCURRENT_TESTS = 10;
     
+    private final PluginRegistry pluginRegistry;
     private final Map<String, TestExecution> activeTests = new ConcurrentHashMap<>();
     private final Map<String, TestResult> completedTests = new ConcurrentHashMap<>();
+    
+    public TestExecutionService(PluginRegistry pluginRegistry) {
+        this.pluginRegistry = pluginRegistry;
+    }
     
     public Map<String, TestExecution> getActiveTests() {
         return activeTests;
@@ -219,12 +226,54 @@ public class TestExecutionService {
     }
     
     private TaskFactory createTaskFactory(String taskType, Object taskParameter) {
-        return switch (taskType.toUpperCase()) {
+        String taskTypeName = taskType.toUpperCase();
+        
+        // First, try to find a plugin with this name
+        if (pluginRegistry.hasPlugin(taskTypeName)) {
+            logger.debug("Using plugin for task type: {}", taskTypeName);
+            return taskId -> createPluginTask(taskTypeName, taskParameter);
+        }
+        
+        // Fall back to hard-coded tasks for backward compatibility
+        logger.debug("Using hard-coded implementation for task type: {}", taskTypeName);
+        return switch (taskTypeName) {
             case "SLEEP" -> taskId -> createSleepTask(taskId, getIntParameter(taskParameter));
             case "CPU" -> this::createCpuTask;
             case "HTTP" -> taskId -> createHttpTask(getStringParameter(taskParameter));
-            default -> taskId -> createSleepTask(taskId, getIntParameter(taskParameter));
+            default -> {
+                logger.warn("Unknown task type: {}, defaulting to SLEEP", taskTypeName);
+                yield taskId -> createSleepTask(taskId, getIntParameter(taskParameter));
+            }
         };
+    }
+    
+    private Task createPluginTask(String pluginName, Object taskParameter) {
+        try {
+            TaskPlugin plugin = pluginRegistry.createPluginInstance(pluginName);
+            
+            // Initialize plugin with parameters if provided
+            if (taskParameter != null) {
+                Map<String, Object> parameters = convertToParameterMap(taskParameter);
+                plugin.validateParameters(parameters);
+                plugin.initialize(parameters);
+            }
+            
+            return plugin;
+        } catch (Exception e) {
+            logger.error("Failed to create plugin instance: {}", pluginName, e);
+            throw new IllegalStateException("Failed to create plugin: " + pluginName, e);
+        }
+    }
+    
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> convertToParameterMap(Object taskParameter) {
+        if (taskParameter instanceof Map) {
+            return (Map<String, Object>) taskParameter;
+        }
+        
+        // For simple parameters, create a default parameter map
+        // This handles backward compatibility with single-value parameters
+        return Map.of("value", taskParameter);
     }
     
     private int getIntParameter(Object param) {
