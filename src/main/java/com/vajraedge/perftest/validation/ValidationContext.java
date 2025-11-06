@@ -26,12 +26,12 @@ public class ValidationContext {
         return config.getTaskType();
     }
     
-    public Integer getTargetTps() {
-        return config.getTargetTps();
+    public Integer getMaxTpsLimit() {
+        return config.getMaxTpsLimit();
     }
     
-    public Integer getDuration() {
-        return config.getDuration();
+    public Long getTestDurationSeconds() {
+        return config.getTestDurationSeconds();
     }
     
     public Integer getStartingConcurrency() {
@@ -42,8 +42,8 @@ public class ValidationContext {
         return config.getMaxConcurrency();
     }
     
-    public Map<String, Object> getParameters() {
-        return config.getParameters();
+    public Object getTaskParameter() {
+        return config.getTaskParameter();
     }
     
     public Object getAdditionalContext(String key) {

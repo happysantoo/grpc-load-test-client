@@ -31,11 +31,12 @@ public class NetworkCheck implements ValidationCheck {
         String taskType = context.getTaskType();
         
         // Only validate HTTP tasks
-        if (!"HTTP_GET".equals(taskType) && !"HTTP_POST".equals(taskType)) {
+        if (!"HTTP_GET".equals(taskType) && !"HTTP_POST".equals(taskType) && !"HTTP".equals(taskType)) {
             return CheckResult.skip(getName(), "Not applicable for task type: " + taskType);
         }
         
-        String url = (String) context.getParameters().get("url");
+        Object taskParam = context.getTaskParameter();
+        String url = taskParam instanceof String ? (String) taskParam : null;
         if (url == null || url.isBlank()) {
             return CheckResult.skip(getName(), "No URL provided for validation");
         }

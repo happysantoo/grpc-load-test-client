@@ -31,14 +31,14 @@ public class ConfigurationCheck implements ValidationCheck {
         List<String> errors = new ArrayList<>();
         
         // Validate TPS
-        Integer targetTps = context.getTargetTps();
-        if (targetTps != null) {
-            if (targetTps > MAX_SAFE_TPS) {
-                errors.add(String.format("Target TPS (%d) exceeds maximum safe limit (%d)", 
-                    targetTps, MAX_SAFE_TPS));
-            } else if (targetTps > WARN_HIGH_TPS) {
-                warnings.add(String.format("Target TPS (%d) is very high - ensure target service can handle this load", 
-                    targetTps));
+        Integer maxTpsLimit = context.getMaxTpsLimit();
+        if (maxTpsLimit != null) {
+            if (maxTpsLimit > MAX_SAFE_TPS) {
+                errors.add(String.format("Max TPS limit (%d) exceeds maximum safe limit (%d)", 
+                    maxTpsLimit, MAX_SAFE_TPS));
+            } else if (maxTpsLimit > WARN_HIGH_TPS) {
+                warnings.add(String.format("Max TPS limit (%d) is very high - ensure target service can handle this load", 
+                    maxTpsLimit));
             }
         }
         
@@ -55,14 +55,14 @@ public class ConfigurationCheck implements ValidationCheck {
         }
         
         // Validate duration
-        Integer duration = context.getDuration();
-        if (duration != null) {
-            if (duration > MAX_SAFE_DURATION) {
-                errors.add(String.format("Duration (%d seconds) exceeds maximum safe limit (%d seconds / 1 hour)", 
-                    duration, MAX_SAFE_DURATION));
-            } else if (duration < 10) {
-                warnings.add(String.format("Duration (%d seconds) is very short - may not provide meaningful results", 
-                    duration));
+        Long testDuration = context.getTestDurationSeconds();
+        if (testDuration != null) {
+            if (testDuration > MAX_SAFE_DURATION) {
+                errors.add(String.format("Test duration (%d seconds) exceeds maximum safe limit (%d seconds / 1 hour)", 
+                    testDuration, MAX_SAFE_DURATION));
+            } else if (testDuration < 10) {
+                warnings.add(String.format("Test duration (%d seconds) is very short - may not provide meaningful results", 
+                    testDuration));
             }
         }
         
@@ -82,8 +82,9 @@ public class ConfigurationCheck implements ValidationCheck {
         }
         
         // Validate task-specific parameters
-        if ("HTTP_GET".equals(taskType) || "HTTP_POST".equals(taskType)) {
-            String url = (String) context.getParameters().get("url");
+        if ("HTTP_GET".equals(taskType) || "HTTP_POST".equals(taskType) || "HTTP".equals(taskType)) {
+            Object taskParam = context.getTaskParameter();
+            String url = taskParam instanceof String ? (String) taskParam : null;
             if (url == null || url.isBlank()) {
                 errors.add("URL parameter is required for HTTP tasks");
             } else if (!url.startsWith("http://") && !url.startsWith("https://")) {
@@ -98,9 +99,9 @@ public class ConfigurationCheck implements ValidationCheck {
             return CheckResult.warn(getName(), "Configuration has warnings", warnings);
         } else {
             List<String> details = new ArrayList<>();
-            details.add(String.format("✓ Target TPS: %s", targetTps != null ? targetTps : "N/A"));
+            details.add(String.format("✓ Max TPS limit: %s", maxTpsLimit != null ? maxTpsLimit : "N/A"));
             details.add(String.format("✓ Max concurrency: %s", maxConcurrency != null ? maxConcurrency : "N/A"));
-            details.add(String.format("✓ Duration: %s seconds", duration != null ? duration : "N/A"));
+            details.add(String.format("✓ Test duration: %s seconds", testDuration != null ? testDuration : "N/A"));
             details.add(String.format("✓ Task type: %s", taskType));
             return CheckResult.pass(getName(), "Configuration is valid", details);
         }

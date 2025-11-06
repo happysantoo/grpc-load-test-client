@@ -58,6 +58,10 @@ public class CheckResult {
         return new CheckResult(checkName, Status.PASS, message, duration, List.of());
     }
     
+    public static CheckResult pass(String checkName, String message, List<String> details) {
+        return new CheckResult(checkName, Status.PASS, message, Duration.ZERO, details);
+    }
+    
     public static CheckResult warn(String checkName, String message, List<String> details) {
         return new CheckResult(checkName, Status.WARN, message, Duration.ZERO, details);
     }
