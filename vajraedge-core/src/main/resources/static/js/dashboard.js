@@ -11,21 +11,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function loadAvailablePlugins() {
     try {
-        const response = await fetch('/api/tests/plugins');
+        const response = await fetch('/api/plugins/types');
         if (!response.ok) {
             console.error('Failed to load plugins:', response.statusText);
+            // Fallback to legacy task types
+            renderLegacyTaskTypes();
             return;
         }
         
-        const data = await response.json();
-        availablePlugins = data.plugins;
+        const plugins = await response.json();
+        
+        // Group plugins by category
+        availablePlugins = plugins.reduce((acc, plugin) => {
+            if (!acc[plugin.category]) {
+                acc[plugin.category] = [];
+            }
+            acc[plugin.category].push(plugin);
+            return acc;
+        }, {});
         
         // Populate task type dropdown
         populateTaskTypeDropdown();
         
-        console.log('Loaded', data.totalCount, 'plugins');
+        console.log('Loaded', plugins.length, 'plugins from', Object.keys(availablePlugins).length, 'categories');
     } catch (error) {
         console.error('Error loading plugins:', error);
+        // Fallback to legacy task types
+        renderLegacyTaskTypes();
     }
 }
 
@@ -75,6 +87,19 @@ function createOption(value, text) {
     option.value = value;
     option.textContent = text;
     return option;
+}
+
+// Fallback to hardcoded legacy task types if plugin loading fails
+function renderLegacyTaskTypes() {
+    console.warn('Using legacy task types as fallback');
+    const taskTypeSelect = document.getElementById('taskType');
+    taskTypeSelect.innerHTML = '';
+    
+    taskTypeSelect.appendChild(createOption('SLEEP', 'Sleep Task'));
+    taskTypeSelect.appendChild(createOption('CPU', 'CPU Task'));
+    taskTypeSelect.appendChild(createOption('HTTP', 'HTTP Request'));
+    
+    taskTypeSelect.dispatchEvent(new Event('change'));
 }
 
 // Handle test mode change
