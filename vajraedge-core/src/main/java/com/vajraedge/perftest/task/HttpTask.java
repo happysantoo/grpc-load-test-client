@@ -3,6 +3,7 @@ package com.vajraedge.perftest.task;
 import com.vajraedge.sdk.SimpleTaskResult;
 import com.vajraedge.sdk.Task;
 import com.vajraedge.sdk.TaskResult;
+import com.vajraedge.sdk.TaskExecutionHelper;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -34,7 +35,6 @@ public class HttpTask implements Task {
     @Override
     public TaskResult execute() throws Exception {
         long startTime = System.nanoTime();
-        long taskId = Thread.currentThread().threadId();
         
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -44,19 +44,17 @@ public class HttpTask implements Task {
                 .build();
             
             HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
-            long latencyNanos = System.nanoTime() - startTime;
             
             boolean success = response.statusCode() >= 200 && response.statusCode() < 300;
             
             if (success) {
-                return SimpleTaskResult.success(taskId, latencyNanos, response.body().length());
+                return TaskExecutionHelper.createSuccessResult(startTime, response.body().length());
             } else {
-                return SimpleTaskResult.failure(taskId, latencyNanos, "HTTP " + response.statusCode());
+                return TaskExecutionHelper.createFailureResult(startTime, "HTTP " + response.statusCode());
             }
             
         } catch (Exception e) {
-            long latencyNanos = System.nanoTime() - startTime;
-            return SimpleTaskResult.failure(taskId, latencyNanos, e.getMessage());
+            return TaskExecutionHelper.createFailureResult(startTime, e.getMessage());
         }
     }
 }

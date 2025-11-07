@@ -5,6 +5,8 @@ import com.vajraedge.sdk.TaskResult;
 import com.vajraedge.sdk.TaskMetadata;
 import com.vajraedge.sdk.TaskMetadata.ParameterDef;
 import com.vajraedge.sdk.TaskPlugin;
+import com.vajraedge.sdk.ParameterValidator;
+import com.vajraedge.sdk.TaskExecutionHelper;
 import com.vajraedge.sdk.annotations.VajraTask;
 
 import java.net.URI;
@@ -98,53 +100,17 @@ public class HttpPostTask implements TaskPlugin {
     
     @Override
     public void validateParameters(Map<String, Object> parameters) {
-        // Validate URL
-        if (!parameters.containsKey("url")) {
-            throw new IllegalArgumentException("URL parameter is required");
-        }
-        
-        String urlStr = parameters.get("url").toString();
-        if (urlStr.isBlank()) {
-            throw new IllegalArgumentException("URL cannot be empty");
-        }
-        
-        try {
-            URI.create(urlStr);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid URL format: " + urlStr);
-        }
-        
-        // Validate body
-        if (!parameters.containsKey("body")) {
-            throw new IllegalArgumentException("Body parameter is required");
-        }
-        
-        // Validate timeout
-        if (parameters.containsKey("timeout")) {
-            Object timeoutObj = parameters.get("timeout");
-            int timeout = timeoutObj instanceof Integer ? (Integer) timeoutObj : 
-                         Integer.parseInt(timeoutObj.toString());
-            
-            if (timeout < 100 || timeout > 60000) {
-                throw new IllegalArgumentException("Timeout must be between 100 and 60000 milliseconds");
-            }
-        }
+        ParameterValidator.requireValidUrl(parameters, "url");
+        ParameterValidator.requireString(parameters, "body");
+        ParameterValidator.validateTimeout(parameters, "timeout");
     }
     
     @Override
     public void initialize(Map<String, Object> parameters) {
         this.url = parameters.get("url").toString();
         this.body = parameters.get("body").toString();
-        
-        if (parameters.containsKey("contentType")) {
-            this.contentType = parameters.get("contentType").toString();
-        }
-        
-        if (parameters.containsKey("timeout")) {
-            Object timeoutObj = parameters.get("timeout");
-            this.timeoutMs = timeoutObj instanceof Integer ? (Integer) timeoutObj : 
-                            Integer.parseInt(timeoutObj.toString());
-        }
+        this.contentType = ParameterValidator.getStringOrDefault(parameters, "contentType", "application/json");
+        this.timeoutMs = ParameterValidator.getIntegerOrDefault(parameters, "timeout", 5000);
         
         if (parameters.containsKey("headers") && parameters.get("headers") instanceof Map) {
             @SuppressWarnings("unchecked")
@@ -155,7 +121,6 @@ public class HttpPostTask implements TaskPlugin {
     
     @Override
     public TaskResult execute() throws Exception {
-        long taskId = Thread.currentThread().threadId();
         long startTime = System.nanoTime();
         
         try {
@@ -171,23 +136,20 @@ public class HttpPostTask implements TaskPlugin {
             HttpRequest request = requestBuilder.build();
             HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
             
-            long latency = System.nanoTime() - startTime;
             int responseSize = response.body() != null ? response.body().length() : 0;
-            
             boolean success = response.statusCode() >= 200 && response.statusCode() < 300;
             
             if (success) {
-                return SimpleTaskResult.success(taskId, latency, responseSize, 
+                return TaskExecutionHelper.createSuccessResult(startTime, responseSize,
                     Map.of("statusCode", response.statusCode(), "url", url, "bodySize", body.length()));
             } else {
-                return SimpleTaskResult.failure(taskId, latency, 
-                    "HTTP " + response.statusCode(), 
+                return TaskExecutionHelper.createFailureResult(startTime,
+                    "HTTP " + response.statusCode(),
                     Map.of("statusCode", response.statusCode(), "url", url));
             }
             
         } catch (Exception e) {
-            long latency = System.nanoTime() - startTime;
-            return SimpleTaskResult.failure(taskId, latency, 
+            return TaskExecutionHelper.createFailureResult(startTime,
                 "Request failed: " + e.getMessage(),
                 Map.of("url", url, "error", e.getClass().getSimpleName()));
         }

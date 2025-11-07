@@ -5,6 +5,8 @@ import com.vajraedge.sdk.TaskResult;
 import com.vajraedge.sdk.TaskMetadata;
 import com.vajraedge.sdk.TaskMetadata.ParameterDef;
 import com.vajraedge.sdk.TaskPlugin;
+import com.vajraedge.sdk.ParameterValidator;
+import com.vajraedge.sdk.TaskExecutionHelper;
 import com.vajraedge.sdk.annotations.VajraTask;
 
 import java.util.List;
@@ -61,55 +63,25 @@ public class SleepTask implements TaskPlugin {
     
     @Override
     public void validateParameters(Map<String, Object> parameters) {
-        if (parameters.containsKey("duration")) {
-            Object durationObj = parameters.get("duration");
-            int duration;
-            
-            if (durationObj instanceof Integer) {
-                duration = (Integer) durationObj;
-            } else if (durationObj instanceof String) {
-                try {
-                    duration = Integer.parseInt((String) durationObj);
-                } catch (NumberFormatException e) {
-                    throw new IllegalArgumentException("Duration must be a valid integer");
-                }
-            } else {
-                throw new IllegalArgumentException("Duration must be an integer");
-            }
-            
-            if (duration < 1 || duration > 60000) {
-                throw new IllegalArgumentException("Duration must be between 1 and 60000 milliseconds");
-            }
-        }
+        ParameterValidator.requireIntegerInRange(parameters, "duration", 1, 60000);
     }
     
     @Override
     public void initialize(Map<String, Object> parameters) {
-        if (parameters.containsKey("duration")) {
-            Object durationObj = parameters.get("duration");
-            if (durationObj instanceof Integer) {
-                this.durationMs = (Integer) durationObj;
-            } else if (durationObj instanceof String) {
-                this.durationMs = Integer.parseInt((String) durationObj);
-            }
-        }
+        this.durationMs = ParameterValidator.getIntegerOrDefault(parameters, "duration", 100);
     }
     
     @Override
     public TaskResult execute() throws Exception {
-        long taskId = Thread.currentThread().threadId();
         long startTime = System.nanoTime();
         
         try {
             Thread.sleep(durationMs);
-            long latency = System.nanoTime() - startTime;
-            
-            return SimpleTaskResult.success(taskId, latency);
+            return TaskExecutionHelper.createSuccessResult(startTime);
             
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            long latency = System.nanoTime() - startTime;
-            return SimpleTaskResult.failure(taskId, latency, "Interrupted: " + e.getMessage());
+            return TaskExecutionHelper.createFailureResult(startTime, "Interrupted: " + e.getMessage());
         }
     }
 }

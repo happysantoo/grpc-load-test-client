@@ -5,6 +5,8 @@ import com.vajraedge.sdk.TaskResult;
 import com.vajraedge.sdk.TaskMetadata;
 import com.vajraedge.sdk.TaskMetadata.ParameterDef;
 import com.vajraedge.sdk.TaskPlugin;
+import com.vajraedge.sdk.ParameterValidator;
+import com.vajraedge.sdk.TaskExecutionHelper;
 import com.vajraedge.sdk.annotations.VajraTask;
 
 import java.util.List;
@@ -104,41 +106,12 @@ public class PostgresQueryTask implements TaskPlugin {
     
     @Override
     public void validateParameters(Map<String, Object> parameters) {
-        if (!parameters.containsKey("jdbcUrl") || parameters.get("jdbcUrl").toString().isBlank()) {
-            throw new IllegalArgumentException("jdbcUrl parameter is required");
-        }
-        
-        if (!parameters.containsKey("username") || parameters.get("username").toString().isBlank()) {
-            throw new IllegalArgumentException("username parameter is required");
-        }
-        
-        if (!parameters.containsKey("password")) {
-            throw new IllegalArgumentException("password parameter is required");
-        }
-        
-        if (!parameters.containsKey("query") || parameters.get("query").toString().isBlank()) {
-            throw new IllegalArgumentException("query parameter is required");
-        }
-        
-        if (parameters.containsKey("queryTimeout")) {
-            Object timeoutObj = parameters.get("queryTimeout");
-            int timeout = timeoutObj instanceof Integer ? (Integer) timeoutObj : 
-                         Integer.parseInt(timeoutObj.toString());
-            
-            if (timeout < 1 || timeout > 300) {
-                throw new IllegalArgumentException("queryTimeout must be between 1 and 300 seconds");
-            }
-        }
-        
-        if (parameters.containsKey("poolSize")) {
-            Object poolSizeObj = parameters.get("poolSize");
-            int size = poolSizeObj instanceof Integer ? (Integer) poolSizeObj : 
-                      Integer.parseInt(poolSizeObj.toString());
-            
-            if (size < 1 || size > 100) {
-                throw new IllegalArgumentException("poolSize must be between 1 and 100");
-            }
-        }
+        ParameterValidator.requireString(parameters, "jdbcUrl");
+        ParameterValidator.requireString(parameters, "username");
+        ParameterValidator.requireParameter(parameters, "password");
+        ParameterValidator.requireString(parameters, "query");
+        ParameterValidator.requireIntegerInRange(parameters, "queryTimeout", 1, 300);
+        ParameterValidator.requireIntegerInRange(parameters, "poolSize", 1, 100);
     }
     
     @Override
@@ -147,18 +120,8 @@ public class PostgresQueryTask implements TaskPlugin {
         this.username = parameters.get("username").toString();
         this.password = parameters.get("password").toString();
         this.query = parameters.get("query").toString();
-        
-        if (parameters.containsKey("queryTimeout")) {
-            Object timeoutObj = parameters.get("queryTimeout");
-            this.queryTimeoutSeconds = timeoutObj instanceof Integer ? (Integer) timeoutObj : 
-                                      Integer.parseInt(timeoutObj.toString());
-        }
-        
-        if (parameters.containsKey("poolSize")) {
-            Object poolSizeObj = parameters.get("poolSize");
-            this.poolSize = poolSizeObj instanceof Integer ? (Integer) poolSizeObj : 
-                           Integer.parseInt(poolSizeObj.toString());
-        }
+        this.queryTimeoutSeconds = ParameterValidator.getIntegerOrDefault(parameters, "queryTimeout", 5);
+        this.poolSize = ParameterValidator.getIntegerOrDefault(parameters, "poolSize", 10);
         
         // In real implementation, initialize connection pool:
         // HikariConfig config = new HikariConfig();
@@ -172,7 +135,6 @@ public class PostgresQueryTask implements TaskPlugin {
     
     @Override
     public TaskResult execute() throws Exception {
-        long taskId = Thread.currentThread().threadId();
         long startTime = System.nanoTime();
         
         try {
@@ -188,14 +150,12 @@ public class PostgresQueryTask implements TaskPlugin {
             //             while (rs.next()) {
             //                 rowCount++;
             //             }
-            //             long latency = System.nanoTime() - startTime;
-            //             return SimpleTaskResult.success(taskId, latency, rowCount,
+            //             return TaskExecutionHelper.createSuccessResult(startTime, rowCount,
             //                 Map.of("rowCount", rowCount, "query", query));
             //         }
             //     } else {
             //         int updateCount = stmt.executeUpdate();
-            //         long latency = System.nanoTime() - startTime;
-            //         return SimpleTaskResult.success(taskId, latency, updateCount,
+            //         return TaskExecutionHelper.createSuccessResult(startTime, updateCount,
             //             Map.of("updateCount", updateCount, "query", query));
             //     }
             // }
@@ -203,14 +163,11 @@ public class PostgresQueryTask implements TaskPlugin {
             // Example stub implementation that simulates database query:
             Thread.sleep(5); // Simulate query execution
             
-            long latency = System.nanoTime() - startTime;
-            
-            return SimpleTaskResult.success(taskId, latency, 1, 
+            return TaskExecutionHelper.createSuccessResult(startTime, 1, 
                 Map.of("jdbcUrl", jdbcUrl, "query", query, "type", "example"));
             
         } catch (Exception e) {
-            long latency = System.nanoTime() - startTime;
-            return SimpleTaskResult.failure(taskId, latency, 
+            return TaskExecutionHelper.createFailureResult(startTime, 
                 "Query failed: " + e.getMessage(),
                 Map.of("jdbcUrl", jdbcUrl, "query", query, "error", e.getClass().getSimpleName()));
         }
