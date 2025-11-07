@@ -1,4 +1,4 @@
-package com.vajraedge.perftest.plugins;
+package com.vajraedge.plugins.http;
 
 import com.vajraedge.sdk.SimpleTaskResult;
 import com.vajraedge.sdk.TaskResult;
@@ -16,35 +16,31 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * HTTP POST request task plugin for load testing REST APIs with payloads.
- * Supports custom headers, request bodies, timeouts, and response validation.
+ * HTTP GET request task plugin for load testing REST APIs.
+ * Supports custom headers, timeouts, and response validation.
  *
  * @since 1.1.0
  */
 @VajraTask(
-    name = "HTTP_POST",
-    displayName = "HTTP POST Request",
-    description = "Performs HTTP POST requests to test REST API endpoints with request bodies",
+    name = "HTTP_GET",
+    displayName = "HTTP GET Request",
+    description = "Performs HTTP GET requests to test REST API endpoints",
     category = "HTTP",
     version = "1.0.0",
     author = "VajraEdge"
 )
-public class HttpPostTaskPlugin implements TaskPlugin {
+public class HttpGetTask implements TaskPlugin {
     
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
         .version(HttpClient.Version.HTTP_1_1)
         .build();
     
     private String url;
-    private String body;
-    private String contentType;
     private int timeoutMs;
     private Map<String, String> headers;
     
-    public HttpPostTaskPlugin() {
-        this.url = "http://localhost:8080/api/test";
-        this.body = "{}";
-        this.contentType = "application/json";
+    public HttpGetTask() {
+        this.url = "http://localhost:8080/actuator/health";
         this.timeoutMs = 5000;
         this.headers = Map.of();
     }
@@ -52,23 +48,14 @@ public class HttpPostTaskPlugin implements TaskPlugin {
     @Override
     public TaskMetadata getMetadata() {
         return TaskMetadata.builder()
-            .name("HTTP_POST")
-            .displayName("HTTP POST Request")
-            .description("Performs HTTP POST requests to test REST API endpoints with request bodies")
+            .name("HTTP_GET")
+            .displayName("HTTP GET Request")
+            .description("Performs HTTP GET requests to test REST API endpoints")
             .category("HTTP")
             .parameters(List.of(
                 ParameterDef.requiredString(
                     "url",
-                    "Target URL for the HTTP POST request"
-                ),
-                ParameterDef.requiredString(
-                    "body",
-                    "Request body content"
-                ),
-                ParameterDef.optionalString(
-                    "contentType",
-                    "application/json",
-                    "Content-Type header value"
+                    "Target URL for the HTTP GET request"
                 ),
                 ParameterDef.optionalInteger(
                     "timeout",
@@ -82,7 +69,7 @@ public class HttpPostTaskPlugin implements TaskPlugin {
                     "Map<String,String>",
                     false,
                     Map.of(),
-                    "Custom HTTP headers (Content-Type will be added automatically)",
+                    "Custom HTTP headers",
                     null,
                     null,
                     null
@@ -90,7 +77,7 @@ public class HttpPostTaskPlugin implements TaskPlugin {
             ))
             .metadata(Map.of(
                 "protocol", "HTTP/1.1",
-                "method", "POST",
+                "method", "GET",
                 "blocking", "true"
             ))
             .build();
@@ -114,11 +101,6 @@ public class HttpPostTaskPlugin implements TaskPlugin {
             throw new IllegalArgumentException("Invalid URL format: " + urlStr);
         }
         
-        // Validate body
-        if (!parameters.containsKey("body")) {
-            throw new IllegalArgumentException("Body parameter is required");
-        }
-        
         // Validate timeout
         if (parameters.containsKey("timeout")) {
             Object timeoutObj = parameters.get("timeout");
@@ -134,11 +116,6 @@ public class HttpPostTaskPlugin implements TaskPlugin {
     @Override
     public void initialize(Map<String, Object> parameters) {
         this.url = parameters.get("url").toString();
-        this.body = parameters.get("body").toString();
-        
-        if (parameters.containsKey("contentType")) {
-            this.contentType = parameters.get("contentType").toString();
-        }
         
         if (parameters.containsKey("timeout")) {
             Object timeoutObj = parameters.get("timeout");
@@ -162,10 +139,9 @@ public class HttpPostTaskPlugin implements TaskPlugin {
             HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofMillis(timeoutMs))
-                .header("Content-Type", contentType)
-                .POST(HttpRequest.BodyPublishers.ofString(body));
+                .GET();
             
-            // Add custom headers (will override Content-Type if provided)
+            // Add custom headers
             headers.forEach(requestBuilder::header);
             
             HttpRequest request = requestBuilder.build();
@@ -178,7 +154,7 @@ public class HttpPostTaskPlugin implements TaskPlugin {
             
             if (success) {
                 return SimpleTaskResult.success(taskId, latency, responseSize, 
-                    Map.of("statusCode", response.statusCode(), "url", url, "bodySize", body.length()));
+                    Map.of("statusCode", response.statusCode(), "url", url));
             } else {
                 return SimpleTaskResult.failure(taskId, latency, 
                     "HTTP " + response.statusCode(), 

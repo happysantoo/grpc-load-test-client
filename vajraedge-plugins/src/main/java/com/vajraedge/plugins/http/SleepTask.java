@@ -1,4 +1,4 @@
-package com.vajraedge.perftest.plugins;
+package com.vajraedge.plugins.http;
 
 import com.vajraedge.sdk.SimpleTaskResult;
 import com.vajraedge.sdk.TaskResult;
@@ -24,15 +24,15 @@ import java.util.Map;
     version = "1.0.0",
     author = "VajraEdge"
 )
-public class SleepTaskPlugin implements TaskPlugin {
+public class SleepTask implements TaskPlugin {
     
     private int durationMs;
     
-    public SleepTaskPlugin() {
+    public SleepTask() {
         this.durationMs = 100; // Default
     }
     
-    public SleepTaskPlugin(int durationMs) {
+    public SleepTask(int durationMs) {
         this.durationMs = durationMs;
     }
     
