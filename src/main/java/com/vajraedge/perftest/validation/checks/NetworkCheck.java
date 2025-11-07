@@ -1,5 +1,6 @@
 package com.vajraedge.perftest.validation.checks;
 
+import com.vajraedge.perftest.constants.TaskType;
 import com.vajraedge.perftest.validation.CheckResult;
 import com.vajraedge.perftest.validation.ValidationCheck;
 import com.vajraedge.perftest.validation.ValidationContext;
@@ -13,7 +14,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Validates network connectivity (DNS, TCP connections).
+ * Validates network connectivity to the target HTTP service.
+ * 
+ * <p>This check verifies DNS resolution and TCP connectivity as a pre-flight check
+ * before attempting actual HTTP requests. Helps identify network-level issues early.</p>
+ * 
+ * <p>Only applies to HTTP-based task types. Other task types are skipped.</p>
+ * 
+ * @see TaskType
+ * @see ValidationCheck
  */
 @Component
 public class NetworkCheck implements ValidationCheck {
@@ -28,19 +37,23 @@ public class NetworkCheck implements ValidationCheck {
     
     @Override
     public CheckResult execute(ValidationContext context) {
-        String taskType = context.getTaskType();
+        String taskTypeStr = context.getTaskType();
+        TaskType taskType = TaskType.fromString(taskTypeStr);
         
         // Only validate HTTP tasks
-        if (!"HTTP_GET".equals(taskType) && !"HTTP_POST".equals(taskType) && !"HTTP".equals(taskType)) {
-            return CheckResult.skip(getName(), "Not applicable for task type: " + taskType);
+        if (taskType == null || !taskType.isHttpTask()) {
+            log.debug("Skipping network check for non-HTTP task type: {}", taskTypeStr);
+            return CheckResult.skip(getName(), "Not applicable for task type: " + taskTypeStr);
         }
         
         Object taskParam = context.getTaskParameter();
         String url = taskParam instanceof String ? (String) taskParam : null;
         if (url == null || url.isBlank()) {
+            log.debug("Skipping network check: No URL provided");
             return CheckResult.skip(getName(), "No URL provided for validation");
         }
         
+        log.info("Performing network check for URL: {}", url);
         return validateNetworkConnectivity(url);
     }
     
