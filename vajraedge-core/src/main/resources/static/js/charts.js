@@ -61,17 +61,20 @@ window.initializeCharts = function initializeCharts() {
                 legend: {
                     display: true,
                     labels: {
+                        font: {
+                            size: 11
+                        },
                         generateLabels: function(chart) {
                             return [
                                 {
-                                    text: 'TPS (Ramp-Up)',
+                                    text: 'Ramp-Up Phase',
                                     fillStyle: 'rgb(23, 162, 184)',
                                     strokeStyle: 'rgb(23, 162, 184)',
                                     lineWidth: 2,
                                     pointStyle: 'circle'
                                 },
                                 {
-                                    text: 'TPS (Sustain)',
+                                    text: 'Sustain Phase',
                                     fillStyle: 'rgb(40, 167, 69)',
                                     strokeStyle: 'rgb(40, 167, 69)',
                                     lineWidth: 2,
@@ -171,47 +174,29 @@ window.initializeCharts = function initializeCharts() {
                 legend: {
                     display: true,
                     labels: {
+                        font: {
+                            size: 11
+                        },
                         generateLabels: function(chart) {
                             return [
                                 {
-                                    text: 'P50 (Ramp-Up)',
+                                    text: 'P50 Latency',
                                     fillStyle: 'rgb(54, 162, 235)',
                                     strokeStyle: 'rgb(54, 162, 235)',
                                     lineWidth: 2,
                                     pointStyle: 'circle'
                                 },
                                 {
-                                    text: 'P50 (Sustain)',
-                                    fillStyle: 'rgb(23, 162, 184)',
-                                    strokeStyle: 'rgb(23, 162, 184)',
-                                    lineWidth: 2,
-                                    pointStyle: 'circle'
-                                },
-                                {
-                                    text: 'P95 (Ramp-Up)',
+                                    text: 'P95 Latency',
                                     fillStyle: 'rgb(255, 206, 86)',
                                     strokeStyle: 'rgb(255, 206, 86)',
                                     lineWidth: 2,
                                     pointStyle: 'circle'
                                 },
                                 {
-                                    text: 'P95 (Sustain)',
-                                    fillStyle: 'rgb(255, 193, 7)',
-                                    strokeStyle: 'rgb(255, 193, 7)',
-                                    lineWidth: 2,
-                                    pointStyle: 'circle'
-                                },
-                                {
-                                    text: 'P99 (Ramp-Up)',
+                                    text: 'P99 Latency',
                                     fillStyle: 'rgb(255, 99, 132)',
                                     strokeStyle: 'rgb(255, 99, 132)',
-                                    lineWidth: 2,
-                                    pointStyle: 'circle'
-                                },
-                                {
-                                    text: 'P99 (Sustain)',
-                                    fillStyle: 'rgb(220, 53, 69)',
-                                    strokeStyle: 'rgb(220, 53, 69)',
                                     lineWidth: 2,
                                     pointStyle: 'circle'
                                 }
@@ -226,10 +211,13 @@ window.initializeCharts = function initializeCharts() {
                         },
                         afterLabel: function(context) {
                             const idx = context.dataIndex;
-                            const sustainColors = ['rgb(23, 162, 184)', 'rgb(255, 193, 7)', 'rgb(220, 53, 69)'];
                             const color = context.dataset.pointBackgroundColor[idx];
-                            const phase = sustainColors.includes(color) ? 'Sustain' : 'Ramp-Up';
-                            return 'Phase: ' + phase;
+                            // Sustain colors for each metric
+                            const sustainP50 = 'rgb(23, 162, 184)';
+                            const sustainP95 = 'rgb(255, 193, 7)';
+                            const sustainP99 = 'rgb(220, 53, 69)';
+                            const isSustain = [sustainP50, sustainP95, sustainP99].includes(color);
+                            return 'Phase: ' + (isSustain ? 'Sustain' : 'Ramp-Up');
                         }
                     }
                 }

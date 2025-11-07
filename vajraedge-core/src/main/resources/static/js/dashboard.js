@@ -388,7 +388,6 @@ function collectTaskParameters() {
     
     // Return map if we have parameters, otherwise null
     return Object.keys(parameters).length > 0 ? parameters : null;
-    return parameters;
 }
 
 // ========================================
