@@ -1,0 +1,50 @@
+// VajraEdge SDK - Lightweight task interface for load testing
+// Zero external dependencies - pure Java 21
+
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+description = 'VajraEdge SDK - Core interfaces for task plugins and workers'
+
+dependencies {
+    // ZERO external dependencies - pure Java 21
+    // This keeps the SDK lightweight for plugin developers
+}
+
+jar {
+    manifest {
+        attributes(
+            'Implementation-Title': 'VajraEdge SDK',
+            'Implementation-Version': version,
+            'Automatic-Module-Name': 'com.vajraedge.sdk',
+            'Created-By': 'Gradle ' + gradle.gradleVersion,
+            'Build-Jdk': System.getProperty('java.version')
+        )
+    }
+}
+
+// Maven publishing configuration (for future Maven Central distribution)
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = 'com.vajraedge'
+            artifactId = 'vajraedge-sdk'
+            version = version
+            from components.java
+            
+            pom {
+                name = 'VajraEdge SDK'
+                description = 'Lightweight SDK for building VajraEdge task plugins and workers'
+                url = 'https://github.com/happysantoo/vajraedge'
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,33 @@
+// VajraEdge Worker - Template for building custom worker applications
+
+plugins {
+    id 'java'
+    id 'application'
+}
+
+description = 'VajraEdge Worker - Template for building custom workers'
+
+dependencies {
+    // SDK dependency
+    implementation project(':vajraedge-sdk')
+    
+    // gRPC client for controller communication
+    implementation "io.grpc:grpc-netty-shaded:${rootProject.ext.grpcVersion}"
+    implementation "io.grpc:grpc-protobuf:${rootProject.ext.grpcVersion}"
+    implementation "io.grpc:grpc-stub:${rootProject.ext.grpcVersion}"
+    
+    // Minimal logging
+    implementation 'org.slf4j:slf4j-api:2.0.9'
+    implementation 'ch.qos.logback:logback-classic:1.4.11'
+    
+    // Command line parsing
+    implementation 'info.picocli:picocli:4.7.6'
+    
+    // Testing
+    testImplementation "org.junit.jupiter:junit-jupiter:${rootProject.ext.junitVersion}"
+    testImplementation 'org.assertj:assertj-core:3.26.3'
+}
+
+application {
+    mainClass = 'com.vajraedge.worker.Worker'
+}
