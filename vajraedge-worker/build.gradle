@@ -29,5 +29,5 @@ dependencies {
 }
 
 application {
-    mainClass = 'com.vajraedge.worker.Worker'
+    mainClass = 'net.vajraedge.worker.Worker'
 }

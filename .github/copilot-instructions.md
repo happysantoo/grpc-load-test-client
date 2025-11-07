@@ -47,17 +47,17 @@ VajraEdge is a modern, high-performance load testing framework built with Java 2
 - **Methods**: camelCase, verb-based (e.g., `executeTask()`, `collectMetrics()`)
 - **Variables**: camelCase, descriptive (e.g., `targetTps`, `rampUpDuration`)
 - **Constants**: UPPER_SNAKE_CASE (e.g., `MAX_CONCURRENCY`, `DEFAULT_TIMEOUT`)
-- **Packages**: lowercase, domain-based (e.g., `com.vajraedge.perftest.executor`)
+- **Packages**: lowercase, domain-based (e.g., `net.vajraedge.perftest.executor`)
 
 #### Class Structure
 ```java
 // 1. Package declaration
-package com.vajraedge.perftest.service;
+package net.vajraedge.perftest.service;
 
 // 2. Imports (grouped: java, javax, spring, third-party, internal)
 import java.util.concurrent.*;
 import org.springframework.stereotype.Service;
-import com.vajraedge.perftest.core.Task;
+import net.vajraedge.perftest.core.Task;
 
 // 3. Class documentation
 /**
@@ -200,7 +200,7 @@ class MetricsCollectorSpec extends Specification {
 ### Package Organization
 
 ```
-com.vajraedge.perftest/
+net.vajraedge.perftest/
 ├── Application.java              # Main Spring Boot application
 ├── config/                        # Configuration beans and setup
 │   ├── TestConfiguration.java
@@ -390,7 +390,7 @@ plugins {
     // 1. Plugins
 }
 
-group = 'com.vajraedge'
+group = 'net.vajraedge'
 version = '1.0.0'
 
 java {

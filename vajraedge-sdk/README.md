@@ -433,7 +433,7 @@ Add to your Gradle project:
 
 ```gradle
 dependencies {
-    implementation 'com.vajraedge:vajraedge-sdk:1.0.0'
+    implementation 'net.vajraedge:vajraedge-sdk:1.0.0'
 }
 ```
 

@@ -8,7 +8,7 @@ VajraEdge plugins extend the framework with custom task types for load testing d
 
 ## Available Plugins
 
-### HTTP Plugins (`com.vajraedge.plugins.http`)
+### HTTP Plugins (`net.vajraedge.plugins.http`)
 
 #### 1. HttpGetTask
 Performs HTTP GET requests to test REST API endpoints.
@@ -84,7 +84,7 @@ plugin.initialize(params);
 TaskResult result = plugin.execute();
 ```
 
-### gRPC Plugins (`com.vajraedge.plugins.grpc`)
+### gRPC Plugins (`net.vajraedge.plugins.grpc`)
 
 #### GrpcUnaryTask (Example Implementation)
 Reference implementation showing how to create a gRPC plugin.
@@ -139,7 +139,7 @@ YourRequest request = parseJsonToProto(requestJson);
 YourResponse response = stub.yourMethod(request);
 ```
 
-### Database Plugins (`com.vajraedge.plugins.database`)
+### Database Plugins (`net.vajraedge.plugins.database`)
 
 #### PostgresQueryTask (Example Implementation)
 Reference implementation showing how to create a database plugin.
@@ -207,11 +207,11 @@ dependencies {
 ```java
 package com.yourcompany.plugins;
 
-import com.vajraedge.sdk.TaskPlugin;
-import com.vajraedge.sdk.TaskResult;
-import com.vajraedge.sdk.TaskMetadata;
-import com.vajraedge.sdk.SimpleTaskResult;
-import com.vajraedge.sdk.annotations.VajraTask;
+import net.vajraedge.sdk.TaskPlugin;
+import net.vajraedge.sdk.TaskResult;
+import net.vajraedge.sdk.TaskMetadata;
+import net.vajraedge.sdk.SimpleTaskResult;
+import net.vajraedge.sdk.annotations.VajraTask;
 import java.util.Map;
 
 @VajraTask(

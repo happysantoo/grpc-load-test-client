@@ -18,7 +18,7 @@ jar {
         attributes(
             'Implementation-Title': 'VajraEdge SDK',
             'Implementation-Version': version,
-            'Automatic-Module-Name': 'com.vajraedge.sdk',
+            'Automatic-Module-Name': 'net.vajraedge.sdk',
             'Created-By': 'Gradle ' + gradle.gradleVersion,
             'Build-Jdk': System.getProperty('java.version')
         )
@@ -29,7 +29,7 @@ jar {
 publishing {
     publications {
         maven(MavenPublication) {
-            groupId = 'com.vajraedge'
+            groupId = 'net.vajraedge'
             artifactId = 'vajraedge-sdk'
             version = version
             from components.java

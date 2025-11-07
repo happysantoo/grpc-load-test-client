@@ -78,7 +78,7 @@ vajraedge/
 ### Phase 2: Extract SDK (4 hours)
 **Commit**: `c8cbedc` - "feat(sdk): phase 2 - extract SDK module with core interfaces"
 - Moved 9 core files to vajraedge-sdk via `git mv`
-- Updated package: `com.vajraedge.perftest.core` → `com.vajraedge.sdk`
+- Updated package: `net.vajraedge.perftest.core` → `net.vajraedge.sdk`
 - Updated 100+ import statements across Java/Groovy files
 - Fixed nested class imports (TaskMetadata.ParameterDef)
 - Fixed plugin registry imports
@@ -107,7 +107,7 @@ vajraedge/
 - Moved HttpGetTaskPlugin → HttpGetTask
 - Moved HttpPostTaskPlugin → HttpPostTask
 - Moved SleepTaskPlugin → SleepTask
-- Updated package: `com.vajraedge.perftest.plugins` → `com.vajraedge.plugins.http`
+- Updated package: `net.vajraedge.perftest.plugins` → `net.vajraedge.plugins.http`
 - Created GrpcUnaryTask (example with implementation guide)
 - Created PostgresQueryTask (example with implementation guide)
 - Created README.md (300+ lines)
@@ -174,7 +174,7 @@ Users can now build standalone workers:
 ```gradle
 // build.gradle
 dependencies {
-    implementation 'com.vajraedge:vajraedge-sdk:1.0.0'
+    implementation 'net.vajraedge:vajraedge-sdk:1.0.0'
 }
 ```
 
@@ -213,10 +213,10 @@ java -jar my-worker.jar \
 ### Import Changes
 ```java
 // Old
-import com.vajraedge.perftest.core.*;
+import net.vajraedge.perftest.core.*;
 
 // New
-import com.vajraedge.sdk.*;
+import net.vajraedge.sdk.*;
 ```
 
 ### Plugin Names
@@ -231,16 +231,16 @@ HttpGetTask, HttpPostTask, SleepTask
 ### Plugin Packages
 ```java
 // Old
-com.vajraedge.perftest.plugins
+net.vajraedge.perftest.plugins
 
 // New
-com.vajraedge.plugins.http
+net.vajraedge.plugins.http
 ```
 
 ### Migration Command
 ```bash
 find . -name "*.java" -exec sed -i '' \
-  's/com.vajraedge.perftest.core/com.vajraedge.sdk/g' {} +
+  's/net.vajraedge.perftest.core/net.vajraedge.sdk/g' {} +
 ```
 
 ## 🎯 Impact Analysis

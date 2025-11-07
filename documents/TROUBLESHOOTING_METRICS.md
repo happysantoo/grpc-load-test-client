@@ -136,7 +136,7 @@ curl http://localhost:8081/api/products
 
 1. **Task execution failing silently**
    - Check VajraEdge logs for exceptions
-   - Enable TRACE logging: `logging.level.com.vajraedge.perftest=TRACE`
+   - Enable TRACE logging: `logging.level.net.vajraedge.perftest=TRACE`
 
 2. **Async completion not working**
    - Results recorded in `future.thenAccept()` callback
@@ -210,7 +210,7 @@ curl http://localhost:8081/api/products
 Edit `src/main/resources/application.properties`:
 
 ```properties
-logging.level.com.vajraedge.perftest=TRACE
+logging.level.net.vajraedge.perftest=TRACE
 logging.level.org.springframework.messaging=DEBUG
 logging.level.org.springframework.web.socket=DEBUG
 ```

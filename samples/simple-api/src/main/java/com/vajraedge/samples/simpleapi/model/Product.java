@@ -1,4 +1,4 @@
-package com.vajraedge.samples.simpleapi.model;
+package net.vajraedge.samples.simpleapi.model;
 
 import java.time.LocalDateTime;
 import java.util.List;

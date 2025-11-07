@@ -107,7 +107,7 @@ All naming follows project conventions:
 - **Methods**: camelCase, verb-based ✅ (`getTargetConcurrency()`, `adjustConcurrency()`)
 - **Variables**: camelCase, descriptive ✅ (`targetConcurrency`, `rampUpDuration`)
 - **Constants**: UPPER_SNAKE_CASE ✅ (`CONTROL_LOOP_INTERVAL_MS`, `TPS_WINDOW_MS`)
-- **Packages**: lowercase, domain-based ✅ (`com.vajraedge.perftest.concurrency`)
+- **Packages**: lowercase, domain-based ✅ (`net.vajraedge.perftest.concurrency`)
 
 ### 2.2 JavaDoc Documentation ✅ Excellent
 
@@ -333,7 +333,7 @@ Minimal duplication:
 ### 4.4 Package Organization ✅
 
 ```
-com.vajraedge.perftest/
+net.vajraedge.perftest/
 ├── concurrency/               # New package - well organized
 │   ├── ConcurrencyController.java
 │   ├── LinearRampStrategy.java

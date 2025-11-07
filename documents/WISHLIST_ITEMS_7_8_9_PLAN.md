@@ -42,7 +42,7 @@ Implement a comprehensive health check and validation system that runs **before*
 
 #### Component Structure
 ```
-com.vajraedge.perftest.validation/
+net.vajraedge.perftest.validation/
 ├── PreFlightValidator.java          (Main orchestrator)
 ├── ValidationResult.java             (Result container)
 ├── ValidationContext.java            (Validation parameters)
@@ -405,7 +405,7 @@ vajraedge-plugins/                (Example plugins)
 #### 1. **Task Plugin Marker**
 ```java
 // vajraedge-sdk/src/main/java/com/vajraedge/sdk/TaskPlugin.java
-package com.vajraedge.sdk;
+package net.vajraedge.sdk;
 
 /**
  * Marker interface for VajraEdge task plugins.
@@ -431,7 +431,7 @@ public interface TaskPlugin extends Task {
 #### 2. **Task Metadata**
 ```java
 // vajraedge-sdk/src/main/java/com/vajraedge/sdk/TaskMetadata.java
-package com.vajraedge.sdk;
+package net.vajraedge.sdk;
 
 public record TaskMetadata(
     String name,              // e.g., "HTTP_GET"
@@ -455,7 +455,7 @@ public record TaskMetadata(
 #### 3. **Annotation-Based Configuration**
 ```java
 // vajraedge-sdk/src/main/java/com/vajraedge/sdk/annotations/VajraTask.java
-package com.vajraedge.sdk.annotations;
+package net.vajraedge.sdk.annotations;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
@@ -470,10 +470,10 @@ public @interface VajraTask {
 #### 4. **Example Plugin Implementation**
 ```java
 // vajraedge-plugins/http-plugin/src/main/java/com/vajraedge/plugins/http/HttpGetTask.java
-package com.vajraedge.plugins.http;
+package net.vajraedge.plugins.http;
 
-import com.vajraedge.sdk.*;
-import com.vajraedge.sdk.annotations.*;
+import net.vajraedge.sdk.*;
+import net.vajraedge.sdk.annotations.*;
 
 @VajraTask(
     name = "HTTP_GET",
@@ -550,7 +550,7 @@ public class HttpGetTask implements TaskPlugin {
 #### 5. **Service Provider Interface (SPI)**
 ```java
 // vajraedge-sdk/src/main/java/com/vajraedge/sdk/spi/TaskProvider.java
-package com.vajraedge.sdk.spi;
+package net.vajraedge.sdk.spi;
 
 public interface TaskProvider {
     
@@ -568,7 +568,7 @@ public interface TaskProvider {
 
 ```java
 // vajraedge-plugins/http-plugin/src/main/java/com/vajraedge/plugins/http/HttpTaskProvider.java
-package com.vajraedge.plugins.http;
+package net.vajraedge.plugins.http;
 
 public class HttpTaskProvider implements TaskProvider {
     
@@ -594,14 +594,14 @@ public class HttpTaskProvider implements TaskProvider {
 ```
 
 ```
-// vajraedge-plugins/http-plugin/src/main/resources/META-INF/services/com.vajraedge.sdk.spi.TaskProvider
-com.vajraedge.plugins.http.HttpTaskProvider
+// vajraedge-plugins/http-plugin/src/main/resources/META-INF/services/net.vajraedge.sdk.spi.TaskProvider
+net.vajraedge.plugins.http.HttpTaskProvider
 ```
 
 #### 6. **Plugin Registry & Scanner**
 ```java
 // vajraedge-core/src/main/java/com/vajraedge/perftest/plugin/PluginRegistry.java
-package com.vajraedge.perftest.plugin;
+package net.vajraedge.perftest.plugin;
 
 @Service
 public class PluginRegistry {
@@ -729,7 +729,7 @@ plugins {
     id 'maven-publish'
 }
 
-group = 'com.vajraedge'
+group = 'net.vajraedge'
 version = '1.0.0'
 
 java {
@@ -758,7 +758,7 @@ plugins {
 }
 
 dependencies {
-    implementation 'com.vajraedge:vajraedge-sdk:1.0.0'
+    implementation 'net.vajraedge:vajraedge-sdk:1.0.0'
     
     // Plugin-specific dependencies
     implementation 'org.postgresql:postgresql:42.6.0'
@@ -1074,7 +1074,7 @@ syntax = "proto3";
 
 package vajraedge.distributed;
 
-option java_package = "com.vajraedge.perftest.proto";
+option java_package = "net.vajraedge.perftest.proto";
 option java_multiple_files = true;
 
 // Service definition
@@ -1213,7 +1213,7 @@ vajraedge/
 #### **VajraWorker** (Main Facade)
 
 ```java
-package com.vajraedge.worker;
+package net.vajraedge.worker;
 
 public class VajraWorker {
     
@@ -1335,7 +1335,7 @@ public class VajraWorker {
 #### **TaskExecutor** (Local Execution)
 
 ```java
-package com.vajraedge.worker.internal;
+package net.vajraedge.worker.internal;
 
 public class TaskExecutor {
     
@@ -2136,7 +2136,7 @@ VajraEdge acts as a **pass-through** for credentials, never persisting them to d
 
 #### Component Structure
 ```
-com.vajraedge.perftest.auth/
+net.vajraedge.perftest.auth/
 ├── AuthProvider.java                 (Interface for auth strategies)
 ├── AuthContext.java                  (Credential container - in-memory only)
 ├── providers/
@@ -2160,7 +2160,7 @@ com.vajraedge.perftest.auth/
 #### 1. **AuthProvider Interface**
 
 ```java
-package com.vajraedge.perftest.auth;
+package net.vajraedge.perftest.auth;
 
 /**
  * Strategy for providing authentication to tasks.
@@ -2187,7 +2187,7 @@ public interface AuthProvider {
 #### 2. **AuthContext** (In-Memory Credential Container)
 
 ```java
-package com.vajraedge.perftest.auth;
+package net.vajraedge.perftest.auth;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -2255,11 +2255,11 @@ public class AuthContext {
 #### 3. **HTTP Basic Auth Example**
 
 ```java
-package com.vajraedge.perftest.auth.providers;
+package net.vajraedge.perftest.auth.providers;
 
-import com.vajraedge.perftest.auth.AuthContext;
-import com.vajraedge.perftest.auth.AuthProvider;
-import com.vajraedge.perftest.auth.AuthenticationException;
+import net.vajraedge.perftest.auth.AuthContext;
+import net.vajraedge.perftest.auth.AuthProvider;
+import net.vajraedge.perftest.auth.AuthenticationException;
 
 import java.net.http.HttpRequest;
 import java.util.Base64;
@@ -2292,11 +2292,11 @@ public class BasicAuthProvider implements AuthProvider {
 #### 4. **Bearer Token (OAuth2/JWT) Provider**
 
 ```java
-package com.vajraedge.perftest.auth.providers;
+package net.vajraedge.perftest.auth.providers;
 
-import com.vajraedge.perftest.auth.AuthContext;
-import com.vajraedge.perftest.auth.AuthProvider;
-import com.vajraedge.perftest.auth.AuthenticationException;
+import net.vajraedge.perftest.auth.AuthContext;
+import net.vajraedge.perftest.auth.AuthProvider;
+import net.vajraedge.perftest.auth.AuthenticationException;
 
 import java.net.http.HttpRequest;
 
@@ -2324,11 +2324,11 @@ public class BearerTokenProvider implements AuthProvider {
 #### 5. **API Key Provider**
 
 ```java
-package com.vajraedge.perftest.auth.providers;
+package net.vajraedge.perftest.auth.providers;
 
-import com.vajraedge.perftest.auth.AuthContext;
-import com.vajraedge.perftest.auth.AuthProvider;
-import com.vajraedge.perftest.auth.AuthenticationException;
+import net.vajraedge.perftest.auth.AuthContext;
+import net.vajraedge.perftest.auth.AuthProvider;
+import net.vajraedge.perftest.auth.AuthenticationException;
 
 import java.net.http.HttpRequest;
 
@@ -2366,11 +2366,11 @@ public class ApiKeyProvider implements AuthProvider {
 #### 6. **OAuth2 Client Credentials Flow**
 
 ```java
-package com.vajraedge.perftest.auth.providers;
+package net.vajraedge.perftest.auth.providers;
 
-import com.vajraedge.perftest.auth.AuthContext;
-import com.vajraedge.perftest.auth.AuthProvider;
-import com.vajraedge.perftest.auth.AuthenticationException;
+import net.vajraedge.perftest.auth.AuthContext;
+import net.vajraedge.perftest.auth.AuthProvider;
+import net.vajraedge.perftest.auth.AuthenticationException;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -2473,11 +2473,11 @@ public class OAuth2Provider implements AuthProvider {
 #### 7. **Database Authentication Provider**
 
 ```java
-package com.vajraedge.perftest.auth.providers;
+package net.vajraedge.perftest.auth.providers;
 
-import com.vajraedge.perftest.auth.AuthContext;
-import com.vajraedge.perftest.auth.AuthProvider;
-import com.vajraedge.perftest.auth.AuthenticationException;
+import net.vajraedge.perftest.auth.AuthContext;
+import net.vajraedge.perftest.auth.AuthProvider;
+import net.vajraedge.perftest.auth.AuthenticationException;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -2522,11 +2522,11 @@ public class DatabaseAuthProvider implements AuthProvider {
 #### 8. **Kerberos Authentication Provider**
 
 ```java
-package com.vajraedge.perftest.auth.providers;
+package net.vajraedge.perftest.auth.providers;
 
-import com.vajraedge.perftest.auth.AuthContext;
-import com.vajraedge.perftest.auth.AuthProvider;
-import com.vajraedge.perftest.auth.AuthenticationException;
+import net.vajraedge.perftest.auth.AuthContext;
+import net.vajraedge.perftest.auth.AuthProvider;
+import net.vajraedge.perftest.auth.AuthenticationException;
 
 import javax.security.auth.Subject;
 import javax.security.auth.login.AppConfigurationEntry;
@@ -2679,11 +2679,11 @@ public class KerberosAuthProvider implements AuthProvider {
 #### 9. **Kerberos HTTP Provider** (for HTTP services with SPNEGO)
 
 ```java
-package com.vajraedge.perftest.auth.providers;
+package net.vajraedge.perftest.auth.providers;
 
-import com.vajraedge.perftest.auth.AuthContext;
-import com.vajraedge.perftest.auth.AuthProvider;
-import com.vajraedge.perftest.auth.AuthenticationException;
+import net.vajraedge.perftest.auth.AuthContext;
+import net.vajraedge.perftest.auth.AuthProvider;
+import net.vajraedge.perftest.auth.AuthenticationException;
 
 import javax.security.auth.Subject;
 import java.net.http.HttpRequest;
@@ -2774,11 +2774,11 @@ public class KerberosHttpProvider implements AuthProvider {
 #### 10. **Kerberos Database Provider** (for JDBC with Kerberos)
 
 ```java
-package com.vajraedge.perftest.auth.providers;
+package net.vajraedge.perftest.auth.providers;
 
-import com.vajraedge.perftest.auth.AuthContext;
-import com.vajraedge.perftest.auth.AuthProvider;
-import com.vajraedge.perftest.auth.AuthenticationException;
+import net.vajraedge.perftest.auth.AuthContext;
+import net.vajraedge.perftest.auth.AuthProvider;
+import net.vajraedge.perftest.auth.AuthenticationException;
 
 import javax.security.auth.Subject;
 import java.security.PrivilegedExceptionAction;
@@ -2858,11 +2858,11 @@ public class KerberosDatabaseProvider implements AuthProvider {
 #### 11. **Kerberos Kafka Provider**
 
 ```java
-package com.vajraedge.perftest.auth.providers;
+package net.vajraedge.perftest.auth.providers;
 
-import com.vajraedge.perftest.auth.AuthContext;
-import com.vajraedge.perftest.auth.AuthProvider;
-import com.vajraedge.perftest.auth.AuthenticationException;
+import net.vajraedge.perftest.auth.AuthContext;
+import net.vajraedge.perftest.auth.AuthProvider;
+import net.vajraedge.perftest.auth.AuthenticationException;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -2934,9 +2934,9 @@ public class KerberosKafkaProvider implements AuthProvider {
 #### 8. **Credential Resolvers** (External Secret Management)
 
 ```java
-package com.vajraedge.perftest.auth.resolver;
+package net.vajraedge.perftest.auth.resolver;
 
-import com.vajraedge.perftest.auth.AuthContext;
+import net.vajraedge.perftest.auth.AuthContext;
 
 /**
  * Interface for resolving credentials from external sources.
@@ -2954,7 +2954,7 @@ public interface CredentialResolver {
 ```
 
 ```java
-package com.vajraedge.perftest.auth.resolver;
+package net.vajraedge.perftest.auth.resolver;
 
 /**
  * Resolves credentials from environment variables.
@@ -2974,7 +2974,7 @@ public class EnvVarResolver implements CredentialResolver {
 ```
 
 ```java
-package com.vajraedge.perftest.auth.resolver;
+package net.vajraedge.perftest.auth.resolver;
 
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
@@ -3014,14 +3014,14 @@ public class AwsSecretsManagerResolver implements CredentialResolver {
 #### Enhanced HttpTask with Authentication
 
 ```java
-package com.vajraedge.perftest.task;
+package net.vajraedge.perftest.task;
 
-import com.vajraedge.perftest.auth.AuthContext;
-import com.vajraedge.perftest.auth.AuthProvider;
-import com.vajraedge.perftest.auth.providers.NoAuthProvider;
-import com.vajraedge.perftest.core.SimpleTaskResult;
-import com.vajraedge.perftest.core.Task;
-import com.vajraedge.perftest.core.TaskResult;
+import net.vajraedge.perftest.auth.AuthContext;
+import net.vajraedge.perftest.auth.AuthProvider;
+import net.vajraedge.perftest.auth.providers.NoAuthProvider;
+import net.vajraedge.perftest.core.SimpleTaskResult;
+import net.vajraedge.perftest.core.Task;
+import net.vajraedge.perftest.core.TaskResult;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -3543,7 +3543,7 @@ Enable **realistic multi-step load testing scenarios** where a test suite orches
 
 #### Component Structure
 ```
-com.vajraedge.perftest.suite/
+net.vajraedge.perftest.suite/
 ├── TestSuite.java                    (Suite definition)
 ├── TestScenario.java                 (Individual scenario)
 ├── TaskMix.java                      (Weighted task distribution)
@@ -3563,7 +3563,7 @@ com.vajraedge.perftest.suite/
 #### 1. **TestSuite Model**
 
 ```java
-package com.vajraedge.perftest.suite;
+package net.vajraedge.perftest.suite;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -3620,9 +3620,9 @@ public class TestSuite {
 #### 2. **TestScenario Model**
 
 ```java
-package com.vajraedge.perftest.suite;
+package net.vajraedge.perftest.suite;
 
-import com.vajraedge.perftest.dto.TestConfigRequest;
+import net.vajraedge.perftest.dto.TestConfigRequest;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -3683,10 +3683,10 @@ public class TestScenario {
 #### 3. **TaskMix (Weighted Task Distribution)**
 
 ```java
-package com.vajraedge.perftest.suite;
+package net.vajraedge.perftest.suite;
 
-import com.vajraedge.perftest.core.Task;
-import com.vajraedge.perftest.core.TaskFactory;
+import net.vajraedge.perftest.core.Task;
+import net.vajraedge.perftest.core.TaskFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -3763,10 +3763,10 @@ public class TaskMix {
 #### 4. **SuiteExecutor (Orchestration)**
 
 ```java
-package com.vajraedge.perftest.suite;
+package net.vajraedge.perftest.suite;
 
-import com.vajraedge.perftest.service.TestExecutionService;
-import com.vajraedge.perftest.correlation.DataStore;
+import net.vajraedge.perftest.service.TestExecutionService;
+import net.vajraedge.perftest.correlation.DataStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

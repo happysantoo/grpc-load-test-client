@@ -25,13 +25,13 @@ cd vajraedge-worker-template
 ```gradle
 dependencies {
     // VajraEdge SDK (required)
-    implementation 'com.vajraedge:vajraedge-sdk:1.0.0'
+    implementation 'net.vajraedge:vajraedge-sdk:1.0.0'
     
     // Add your custom plugins
     implementation project(':my-custom-plugin')
     
     // Or use published plugins
-    implementation 'com.vajraedge:vajraedge-plugins:1.0.0'
+    implementation 'net.vajraedge:vajraedge-plugins:1.0.0'
 }
 ```
 
@@ -40,8 +40,8 @@ dependencies {
 ```java
 package com.mycompany.tasks;
 
-import com.vajraedge.sdk.*;
-import com.vajraedge.sdk.annotations.VajraTask;
+import net.vajraedge.sdk.*;
+import net.vajraedge.sdk.annotations.VajraTask;
 
 @VajraTask(
     name = "MY_API_CALL",

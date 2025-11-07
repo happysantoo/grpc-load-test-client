@@ -49,7 +49,7 @@ vajraedge/
   - `TaskPlugin`, `TaskFactory`, `TaskExecutor`
   - `TaskMetadata`, `@VajraTask`, `@TaskParameter`
 - **Dependencies**: None (pure Java 21)
-- **Package**: `com.vajraedge.sdk`
+- **Package**: `net.vajraedge.sdk`
 
 ### vajraedge-core (46MB JAR with Spring Boot)
 - **Purpose**: Main controller application with web dashboard
@@ -59,7 +59,7 @@ vajraedge/
   - Plugin discovery and registry
   - Test orchestration
 - **Dependencies**: vajraedge-sdk + Spring Boot 3.5.7
-- **Package**: `com.vajraedge.perftest` (unchanged)
+- **Package**: `net.vajraedge.perftest` (unchanged)
 
 ### vajraedge-worker (16KB JAR)
 - **Purpose**: Template for building custom workers
@@ -70,7 +70,7 @@ vajraedge/
   - Metrics reporter
   - CLI configuration with picocli
 - **Dependencies**: vajraedge-sdk + gRPC + picocli
-- **Package**: `com.vajraedge.worker`
+- **Package**: `net.vajraedge.worker`
 
 ### vajraedge-plugins (17KB JAR)
 - **Purpose**: Example plugin implementations
@@ -79,7 +79,7 @@ vajraedge/
   - `GrpcUnaryTask` (stub with implementation guide)
   - `PostgresQueryTask` (stub with implementation guide)
 - **Dependencies**: vajraedge-sdk
-- **Package**: `com.vajraedge.plugins.*`
+- **Package**: `net.vajraedge.plugins.*`
 
 ## ✨ New Capabilities
 
@@ -88,7 +88,7 @@ Users can now build standalone workers:
 
 ```gradle
 dependencies {
-    implementation 'com.vajraedge:vajraedge-sdk:1.0.0'
+    implementation 'net.vajraedge:vajraedge-sdk:1.0.0'
 }
 ```
 
@@ -126,16 +126,16 @@ Architecture now supports:
 ### Breaking Changes
 
 **Import Statements**
-- **Old**: `import com.vajraedge.perftest.core.*;`
-- **New**: `import com.vajraedge.sdk.*;`
+- **Old**: `import net.vajraedge.perftest.core.*;`
+- **New**: `import net.vajraedge.sdk.*;`
 
 **Plugin Class Names**
 - **Old**: `HttpGetTaskPlugin`, `HttpPostTaskPlugin`, `SleepTaskPlugin`
 - **New**: `HttpGetTask`, `HttpPostTask`, `SleepTask`
 
 **Plugin Packages**
-- **Old**: `com.vajraedge.perftest.plugins`
-- **New**: `com.vajraedge.plugins.http`
+- **Old**: `net.vajraedge.perftest.plugins`
+- **New**: `net.vajraedge.plugins.http`
 
 ### What's Unchanged
 
@@ -151,13 +151,13 @@ If you extended VajraEdge:
 
 1. Update imports:
 ```bash
-find . -name "*.java" -exec sed -i '' 's/com.vajraedge.perftest.core/com.vajraedge.sdk/g' {} +
+find . -name "*.java" -exec sed -i '' 's/net.vajraedge.perftest.core/net.vajraedge.sdk/g' {} +
 ```
 
 2. Update dependencies:
 ```gradle
 dependencies {
-    implementation 'com.vajraedge:vajraedge-sdk:1.0.0'
+    implementation 'net.vajraedge:vajraedge-sdk:1.0.0'
 }
 ```
 
@@ -209,7 +209,7 @@ vajraedge-plugins: → vajraedge-sdk
 
 ### Phase 2: Extract SDK (4 hours)
 - Moved 9 core files to vajraedge-sdk
-- Updated package: `com.vajraedge.perftest.core` → `com.vajraedge.sdk`
+- Updated package: `net.vajraedge.perftest.core` → `net.vajraedge.sdk`
 - Updated 100+ import statements
 - Fixed nested class imports
 - Verified 467 tests passing
@@ -233,7 +233,7 @@ vajraedge-plugins: → vajraedge-sdk
 
 ### Phase 5: Plugin Examples (4 hours)
 - Moved HTTP plugins from core to plugins module
-- Updated package: `com.vajraedge.perftest.plugins` → `com.vajraedge.plugins.http`
+- Updated package: `net.vajraedge.perftest.plugins` → `net.vajraedge.plugins.http`
 - Created GrpcUnaryTask (example with guide)
 - Created PostgresQueryTask (example with guide)
 - Created comprehensive README

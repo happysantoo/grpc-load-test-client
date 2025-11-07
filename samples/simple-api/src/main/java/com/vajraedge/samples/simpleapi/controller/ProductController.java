@@ -1,6 +1,6 @@
-package com.vajraedge.samples.simpleapi.controller;
+package net.vajraedge.samples.simpleapi.controller;
 
-import com.vajraedge.samples.simpleapi.model.Product;
+import net.vajraedge.samples.simpleapi.model.Product;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
