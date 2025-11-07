@@ -33,6 +33,76 @@ VajraEdge is a modern, production-ready performance testing framework built with
 - 🧩 **Simple Task Interface**: Benchmark anything by implementing one method
 - 🎨 **Modern UI**: Bootstrap 5 + Chart.js with responsive design
 - 🔍 **Pre-Flight Validation**: Automatic system health checks before test execution
+- 🔧 **Modular Architecture**: Separate SDK, Core, Worker, and Plugins modules
+- 📦 **Lightweight SDK**: 9KB JAR with zero dependencies for custom plugins
+
+## 🏗️ Architecture
+
+VajraEdge uses a modular architecture designed for extensibility and distributed testing:
+
+```
+vajraedge/
+├── vajraedge-sdk/          # Core SDK (9KB, zero dependencies)
+│   └── Task interfaces, annotations, metadata
+├── vajraedge-core/         # Main controller application (Spring Boot)
+│   └── REST API, WebSocket, metrics, validation
+├── vajraedge-worker/       # Worker template for distributed testing
+│   └── Task executor, gRPC client, metrics reporter
+└── vajraedge-plugins/      # Example plugin implementations
+    └── HTTP, gRPC, Database task examples
+```
+
+### Module Details
+
+**vajraedge-sdk** (9KB JAR)
+- Pure Java 21, zero external dependencies
+- Core interfaces: `Task`, `TaskPlugin`, `TaskResult`
+- Annotations: `@VajraTask`, `@TaskParameter`
+- Use this to build custom plugins or workers
+
+**vajraedge-core** (46MB JAR with Spring Boot)
+- Main controller application with web dashboard
+- REST API for test management
+- Real-time metrics via WebSocket
+- Pre-flight validation
+- Plugin discovery and registration
+
+**vajraedge-worker** (16KB JAR)
+- Template for building custom workers
+- Virtual thread task executor (10K+ concurrent tasks)
+- gRPC client for controller communication
+- Configurable via CLI or environment variables
+- Deploy standalone or in containers
+
+**vajraedge-plugins** (17KB JAR)
+- Example implementations: HTTP GET/POST, Sleep
+- Reference implementations: gRPC, PostgreSQL
+- Shows best practices for plugin development
+
+### Building Custom Workers
+
+1. Create new Gradle project
+2. Add SDK dependency:
+```gradle
+dependencies {
+    implementation 'com.vajraedge:vajraedge-sdk:1.0.0'
+}
+```
+
+3. Implement your custom plugins:
+```java
+@VajraTask(name = "MY_TASK", category = "CUSTOM")
+public class MyCustomTask implements TaskPlugin {
+    @Override
+    public TaskResult execute() throws Exception {
+        // Your task logic here
+    }
+}
+```
+
+4. Use worker template or integrate with controller
+
+See [Worker README](vajraedge-worker/README.md) and [Plugin README](vajraedge-plugins/README.md) for details.
 
 ## 🔍 Pre-Flight Validation
 
@@ -202,22 +272,38 @@ The framework will automatically discover and run your check.
 
 ### Prerequisites
 - Java 21 or higher
-- Gradle (wrapper included)
+- Gradle 8.5+ (wrapper included)
 
-### Run the Application
+### Run the Controller Application
 
 ```bash
-# Build the project
-./gradlew clean build
+# Build all modules (SDK, Core, Worker, Plugins)
+./gradlew build
 
-# Start the server
-./gradlew bootRun
+# Start the controller with web dashboard
+./gradlew :vajraedge-core:bootRun
 
 # Access the dashboard
 open http://localhost:8080
 ```
 
 That's it! The dashboard will open in your browser.
+
+### Build Individual Modules
+
+```bash
+# Build just the SDK
+./gradlew :vajraedge-sdk:build
+
+# Build worker template
+./gradlew :vajraedge-worker:build
+
+# Build plugins
+./gradlew :vajraedge-plugins:build
+
+# List all modules
+./gradlew projects
+```
 
 ## 📖 Using the Dashboard
 
