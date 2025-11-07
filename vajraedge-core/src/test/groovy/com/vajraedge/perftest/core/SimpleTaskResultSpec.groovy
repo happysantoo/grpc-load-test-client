@@ -1,5 +1,6 @@
 package com.vajraedge.perftest.core
 
+import com.vajraedge.sdk.SimpleTaskResult
 import spock.lang.Specification
 import spock.lang.Unroll
 

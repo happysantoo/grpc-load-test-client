@@ -1,11 +1,11 @@
 package com.vajraedge.perftest.plugins;
 
-import com.vajraedge.perftest.core.SimpleTaskResult;
-import com.vajraedge.perftest.core.TaskResult;
-import com.vajraedge.perftest.sdk.TaskMetadata;
-import com.vajraedge.perftest.sdk.TaskMetadata.ParameterDef;
-import com.vajraedge.perftest.sdk.TaskPlugin;
-import com.vajraedge.perftest.sdk.annotations.VajraTask;
+import com.vajraedge.sdk.SimpleTaskResult;
+import com.vajraedge.sdk.TaskResult;
+import com.vajraedge.sdk.TaskMetadata;
+import com.vajraedge.sdk.TaskMetadata.ParameterDef;
+import com.vajraedge.sdk.TaskPlugin;
+import com.vajraedge.sdk.annotations.VajraTask;
 
 import java.util.List;
 import java.util.Map;

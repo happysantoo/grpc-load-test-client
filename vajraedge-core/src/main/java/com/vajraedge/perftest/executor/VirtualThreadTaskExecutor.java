@@ -1,8 +1,8 @@
 package com.vajraedge.perftest.executor;
 
-import com.vajraedge.perftest.core.Task;
-import com.vajraedge.perftest.core.TaskExecutor;
-import com.vajraedge.perftest.core.TaskResult;
+import com.vajraedge.sdk.Task;
+import com.vajraedge.sdk.TaskExecutor;
+import com.vajraedge.sdk.TaskResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

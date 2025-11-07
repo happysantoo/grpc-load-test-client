@@ -1,4 +1,4 @@
-package com.vajraedge.perftest.core;
+package com.vajraedge.sdk;
 
 import java.util.concurrent.CompletableFuture;
 

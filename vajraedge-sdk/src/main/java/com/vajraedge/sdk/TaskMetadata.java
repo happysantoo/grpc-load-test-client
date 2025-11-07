@@ -1,4 +1,4 @@
-package com.vajraedge.perftest.sdk;
+package com.vajraedge.sdk;
 
 import java.util.List;
 import java.util.Map;

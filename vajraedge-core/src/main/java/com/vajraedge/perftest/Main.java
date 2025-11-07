@@ -1,8 +1,8 @@
 package com.vajraedge.perftest;
 
-import com.vajraedge.perftest.core.Task;
-import com.vajraedge.perftest.core.TaskFactory;
-import com.vajraedge.perftest.core.SimpleTaskResult;
+import com.vajraedge.sdk.Task;
+import com.vajraedge.sdk.TaskFactory;
+import com.vajraedge.sdk.SimpleTaskResult;
 import com.vajraedge.perftest.runner.PerformanceTestRunner;
 import com.vajraedge.perftest.runner.TestResult;
 import org.slf4j.Logger;

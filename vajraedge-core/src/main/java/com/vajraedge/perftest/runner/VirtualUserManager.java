@@ -1,6 +1,6 @@
 package com.vajraedge.perftest.runner;
 
-import com.vajraedge.perftest.core.TaskFactory;
+import com.vajraedge.sdk.TaskFactory;
 import com.vajraedge.perftest.metrics.MetricsCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

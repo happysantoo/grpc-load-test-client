@@ -1,6 +1,6 @@
 package com.vajraedge.perftest.metrics;
 
-import com.vajraedge.perftest.core.TaskResult;
+import com.vajraedge.sdk.TaskResult;
 import org.apache.commons.math3.stat.descriptive.rank.Percentile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -1,9 +1,9 @@
 package com.vajraedge.perftest.runner;
 
 import com.vajraedge.perftest.concurrency.ConcurrencyController;
-import com.vajraedge.perftest.core.Task;
-import com.vajraedge.perftest.core.TaskFactory;
-import com.vajraedge.perftest.core.TaskResult;
+import com.vajraedge.sdk.Task;
+import com.vajraedge.sdk.TaskFactory;
+import com.vajraedge.sdk.TaskResult;
 import com.vajraedge.perftest.executor.VirtualThreadTaskExecutor;
 import com.vajraedge.perftest.metrics.MetricsCollector;
 import org.slf4j.Logger;

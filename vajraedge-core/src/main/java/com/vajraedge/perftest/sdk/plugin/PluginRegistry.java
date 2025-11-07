@@ -1,8 +1,8 @@
 package com.vajraedge.perftest.sdk.plugin;
 
-import com.vajraedge.perftest.sdk.TaskMetadata;
-import com.vajraedge.perftest.sdk.TaskPlugin;
-import com.vajraedge.perftest.sdk.annotations.VajraTask;
+import com.vajraedge.sdk.TaskMetadata;
+import com.vajraedge.sdk.TaskPlugin;
+import com.vajraedge.sdk.annotations.VajraTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

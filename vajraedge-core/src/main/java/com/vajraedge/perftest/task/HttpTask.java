@@ -1,8 +1,8 @@
 package com.vajraedge.perftest.task;
 
-import com.vajraedge.perftest.core.SimpleTaskResult;
-import com.vajraedge.perftest.core.Task;
-import com.vajraedge.perftest.core.TaskResult;
+import com.vajraedge.sdk.SimpleTaskResult;
+import com.vajraedge.sdk.Task;
+import com.vajraedge.sdk.TaskResult;
 
 import java.net.URI;
 import java.net.http.HttpClient;

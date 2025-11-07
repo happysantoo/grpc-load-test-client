@@ -1,4 +1,4 @@
-package com.vajraedge.perftest.core;
+package com.vajraedge.sdk;
 
 /**
  * Simple immutable implementation of TaskResult.

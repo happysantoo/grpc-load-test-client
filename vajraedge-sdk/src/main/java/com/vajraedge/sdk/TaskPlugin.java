@@ -1,6 +1,4 @@
-package com.vajraedge.perftest.sdk;
-
-import com.vajraedge.perftest.core.Task;
+package com.vajraedge.sdk;
 
 import java.util.Map;
 

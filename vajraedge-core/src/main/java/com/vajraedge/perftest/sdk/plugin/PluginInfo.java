@@ -1,7 +1,7 @@
 package com.vajraedge.perftest.sdk.plugin;
 
-import com.vajraedge.perftest.sdk.TaskMetadata;
-import com.vajraedge.perftest.sdk.TaskPlugin;
+import com.vajraedge.sdk.TaskMetadata;
+import com.vajraedge.sdk.TaskPlugin;
 
 /**
  * Information about a registered plugin.

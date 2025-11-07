@@ -1,6 +1,6 @@
 package com.vajraedge.perftest.task
 
-import com.vajraedge.perftest.core.TaskResult
+import com.vajraedge.sdk.TaskResult
 import spock.lang.Specification
 
 /**

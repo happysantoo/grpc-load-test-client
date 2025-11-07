@@ -1,4 +1,4 @@
-package com.vajraedge.perftest.sdk.annotations;
+package com.vajraedge.sdk.annotations;
 
 import java.lang.annotation.*;
 

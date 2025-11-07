@@ -1,4 +1,4 @@
-package com.vajraedge.perftest.core;
+package com.vajraedge.sdk;
 
 /**
  * Represents a unit of work to be executed in a performance test.
