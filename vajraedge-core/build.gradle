@@ -102,3 +102,13 @@ jacocoTestCoverageVerification {
         }
     }
 }
+
+bootJar {
+    manifest {
+        attributes(
+            'Implementation-Title': 'VajraEdge Performance Framework',
+            'Implementation-Version': version,
+            'License': 'Apache-2.0'
+        )
+    }
+}

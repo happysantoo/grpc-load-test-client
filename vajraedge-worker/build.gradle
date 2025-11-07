@@ -28,6 +28,16 @@ dependencies {
     testImplementation 'org.assertj:assertj-core:3.26.3'
 }
 
+jar {
+    manifest {
+        attributes(
+            'Implementation-Title': 'VajraEdge Worker',
+            'Implementation-Version': version,
+            'License': 'Apache-2.0'
+        )
+    }
+}
+
 application {
     mainClass = 'net.vajraedge.worker.Worker'
 }

@@ -11,6 +11,7 @@
   [![Java 21](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.java.net/projects/jdk/21/)
   [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.7-brightgreen.svg)](https://spring.io/projects/spring-boot)
   [![Virtual Threads](https://img.shields.io/badge/Virtual%20Threads-Enabled-blue.svg)](https://openjdk.org/jeps/444)
+  [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
   
   **Modern • Production-Ready • Real-Time Metrics**
   
@@ -617,6 +618,8 @@ Average latency can be misleading. P95 and P99 percentiles show you the worst-ca
 
 ## 🤝 Contributing
 
+Contributions are welcome! VajraEdge is open source under the Apache 2.0 license.
+
 To add a new task type:
 1. Implement the `Task` interface
 2. Add factory case in `TestExecutionService`
@@ -625,11 +628,26 @@ To add a new task type:
 
 ## 📝 License
 
-This is an example project for educational purposes.
+Copyright 2025 VajraEdge Contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 ## 🙋 Support
 
-For issues or questions, check the documentation in the `documents/` folder.
+For issues or questions:
+- Check the documentation in the `documents/` folder
+- Open an issue on GitHub
+- Review the examples in `vajraedge-plugins/`
 
 ---
 

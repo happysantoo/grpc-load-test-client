@@ -6,6 +6,16 @@ plugins {
 
 description = 'VajraEdge Plugins - Example plugin implementations'
 
+jar {
+    manifest {
+        attributes(
+            'Implementation-Title': 'VajraEdge Plugins',
+            'Implementation-Version': version,
+            'License': 'Apache-2.0'
+        )
+    }
+}
+
 dependencies {
     // SDK dependency only
     api project(':vajraedge-sdk')

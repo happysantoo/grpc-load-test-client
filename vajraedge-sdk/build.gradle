@@ -20,7 +20,8 @@ jar {
             'Implementation-Version': version,
             'Automatic-Module-Name': 'net.vajraedge.sdk',
             'Created-By': 'Gradle ' + gradle.gradleVersion,
-            'Build-Jdk': System.getProperty('java.version')
+            'Build-Jdk': System.getProperty('java.version'),
+            'License': 'Apache-2.0'
         )
     }
 }
@@ -40,9 +41,20 @@ publishing {
                 url = 'https://github.com/happysantoo/vajraedge'
                 licenses {
                     license {
-                        name = 'MIT License'
-                        url = 'https://opensource.org/licenses/MIT'
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
                     }
+                }
+                developers {
+                    developer {
+                        id = 'happysantoo'
+                        name = 'Santhosh Kuppusamy'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:git://github.com/happysantoo/vajraedge.git'
+                    developerConnection = 'scm:git:ssh://github.com/happysantoo/vajraedge.git'
+                    url = 'https://github.com/happysantoo/vajraedge'
                 }
             }
         }
