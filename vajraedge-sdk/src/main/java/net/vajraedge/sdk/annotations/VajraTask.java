@@ -6,7 +6,7 @@ import java.lang.annotation.*;
  * Marks a class as a VajraEdge task plugin.
  * Classes annotated with this will be automatically discovered via classpath scanning.
  * 
- * <p>The annotated class must implement {@link net.vajraedge.perftest.sdk.TaskPlugin}.</p>
+ * <p>The annotated class must implement {@link net.vajraedge.sdk.TaskPlugin}.</p>
  * 
  * <p>Example usage:</p>
  * <pre>{@code

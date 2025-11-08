@@ -2,8 +2,9 @@
 let tpsChart = null;
 let latencyChart = null;
 
-// Data buffers for charts (keep last 60 data points)
+// Chart configuration constants
 const MAX_DATA_POINTS = 60;
+const CHART_LEGEND_FONT_SIZE = 11;
 let tpsData = [];
 let latencyData = {
     p50: [],
@@ -62,7 +63,7 @@ window.initializeCharts = function initializeCharts() {
                     display: true,
                     labels: {
                         font: {
-                            size: 11
+                            size: CHART_LEGEND_FONT_SIZE
                         },
                         generateLabels: function(chart) {
                             return [
@@ -175,7 +176,7 @@ window.initializeCharts = function initializeCharts() {
                     display: true,
                     labels: {
                         font: {
-                            size: 11
+                            size: CHART_LEGEND_FONT_SIZE
                         },
                         generateLabels: function(chart) {
                             return [
