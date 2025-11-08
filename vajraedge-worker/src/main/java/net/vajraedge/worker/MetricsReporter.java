@@ -25,6 +25,7 @@ public class MetricsReporter {
     
     private static final Logger log = LoggerFactory.getLogger(MetricsReporter.class);
     
+    private final String workerId;
     private final GrpcClient grpcClient;
     private final TaskExecutorService taskExecutor;
     private final ScheduledExecutorService scheduler;
@@ -35,10 +36,12 @@ public class MetricsReporter {
     /**
      * Create a new metrics reporter.
      *
+     * @param workerId Unique worker identifier
      * @param grpcClient gRPC client for sending metrics
      * @param taskExecutor Task executor to collect metrics from
      */
-    public MetricsReporter(GrpcClient grpcClient, TaskExecutorService taskExecutor) {
+    public MetricsReporter(String workerId, GrpcClient grpcClient, TaskExecutorService taskExecutor) {
+        this.workerId = workerId;
         this.grpcClient = grpcClient;
         this.taskExecutor = taskExecutor;
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -116,10 +119,10 @@ public class MetricsReporter {
             );
             
             // Send to controller
-            // Note: workerId should be passed to constructor or made available
-            grpcClient.sendMetrics("worker-id", metrics);
+            grpcClient.sendMetrics(workerId, metrics);
             
-            log.debug("Metrics reported: completed={}, failed={}, active={}", 
+            log.debug("Metrics reported: workerId={}, completed={}, failed={}, active={}", 
+                workerId,
                 metrics.completedTasks(), 
                 metrics.failedTasks(), 
                 metrics.activeTasks());

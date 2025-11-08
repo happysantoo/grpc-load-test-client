@@ -52,7 +52,7 @@ public class Worker {
         this.config = config;
         this.grpcClient = new GrpcClient(config.getControllerAddress());
         this.taskExecutor = new TaskExecutorService(config.getMaxConcurrency());
-        this.metricsReporter = new MetricsReporter(grpcClient, taskExecutor);
+        this.metricsReporter = new MetricsReporter(config.getWorkerId(), grpcClient, taskExecutor);
         this.shutdownLatch = new CountDownLatch(1);
         this.running = false;
     }
