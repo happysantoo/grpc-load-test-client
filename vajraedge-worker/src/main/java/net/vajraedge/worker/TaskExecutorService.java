@@ -169,9 +169,12 @@ public class TaskExecutorService {
         
         try {
             // Wait for all permits to be returned (all tasks done)
-            long deadline = System.currentTimeMillis() + timeoutSeconds * 1000;
+            long startTime = System.currentTimeMillis();
+            long deadline = startTime + timeoutSeconds * 1000;
+            
             while (concurrencyLimit.availablePermits() < maxConcurrency) {
-                if (System.currentTimeMillis() > deadline) {
+                long currentTime = System.currentTimeMillis();
+                if (currentTime >= deadline) {
                     log.warn("Timeout waiting for tasks to complete: {} tasks still running", 
                         maxConcurrency - concurrencyLimit.availablePermits());
                     return false;
@@ -179,8 +182,12 @@ public class TaskExecutorService {
                 Thread.sleep(100);
             }
             
+            // Calculate remaining time for executor shutdown
+            long elapsedSeconds = (System.currentTimeMillis() - startTime) / 1000;
+            long remainingSeconds = Math.max(1, timeoutSeconds - elapsedSeconds);
+            
             executor.shutdown();
-            return executor.awaitTermination(timeoutSeconds, TimeUnit.SECONDS);
+            return executor.awaitTermination(remainingSeconds, TimeUnit.SECONDS);
             
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
