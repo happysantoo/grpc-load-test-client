@@ -49,11 +49,8 @@ repositories {
 }
 
 dependencies {
-    // Option 1: SDK only (recommended for plugin development)
-    implementation 'com.github.happysantoo.vajraedge:vajraedge-sdk:0.9.0'
-    
-    // Option 2: Specific module from multimodule project  
-    // implementation 'com.github.happysantoo:vajraedge:vajraedge-sdk:0.9.0'
+    // SDK module from JitPack (zero dependencies, 9KB)
+    implementation 'com.github.happysantoo:vajraedge:vajraedge-sdk:v0.9.1'
 }
 ```
 
@@ -68,14 +65,17 @@ dependencies {
 
 <dependencies>
     <dependency>
-        <groupId>com.github.happysantoo.vajraedge</groupId>
-        <artifactId>vajraedge-sdk</artifactId>
-        <version>0.9.0</version>
+        <groupId>com.github.happysantoo</groupId>
+        <artifactId>vajraedge</artifactId>
+        <version>v0.9.1</version>
+        <classifier>vajraedge-sdk</classifier>
     </dependency>
 </dependencies>
 ```
 
 **Latest Version:** [![JitPack](https://jitpack.io/v/happysantoo/vajraedge.svg)](https://jitpack.io/#happysantoo/vajraedge)
+
+**Note:** For JitPack multi-module projects, use the format `group:artifact:module:version`
 
 See [Building Custom Workers](#building-custom-workers) section below for usage examples.
 
@@ -132,7 +132,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.happysantoo.vajraedge:vajraedge-sdk:0.9.0'
+    implementation 'com.github.happysantoo:vajraedge:vajraedge-sdk:v0.9.1'
 }
 ```
 
