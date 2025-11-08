@@ -157,7 +157,7 @@ public class SuiteStatusResponse {
     }
     
     public List<ScenarioStatusDto> getScenarios() {
-        return scenarios;
+        return new ArrayList<>(scenarios);
     }
     
     public void setScenarios(List<ScenarioStatusDto> scenarios) {
@@ -165,7 +165,7 @@ public class SuiteStatusResponse {
     }
     
     public Map<String, Object> getSuiteMetrics() {
-        return suiteMetrics;
+        return new HashMap<>(suiteMetrics);
     }
     
     public void setSuiteMetrics(Map<String, Object> suiteMetrics) {
@@ -275,7 +275,7 @@ public class SuiteStatusResponse {
         }
         
         public Map<String, Long> getTaskMixDistribution() {
-            return taskMixDistribution;
+            return new HashMap<>(taskMixDistribution);
         }
         
         public void setTaskMixDistribution(Map<String, Long> taskMixDistribution) {

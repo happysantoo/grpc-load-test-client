@@ -71,7 +71,7 @@ public final class ParameterValidator {
      * @param paramName Parameter name
      * @param minValue Minimum allowed value (inclusive)
      * @param maxValue Maximum allowed value (inclusive)
-     * @throws IllegalArgumentException if value is out of range
+     * @throws IllegalArgumentException if value is out of range or cannot be parsed
      */
     public static void requireIntegerInRange(Map<String, Object> parameters, String paramName, 
                                              int minValue, int maxValue) {
@@ -80,8 +80,18 @@ public final class ParameterValidator {
         }
         
         Object valueObj = parameters.get(paramName);
-        int value = valueObj instanceof Integer ? (Integer) valueObj : 
-                   Integer.parseInt(valueObj.toString());
+        int value;
+        
+        if (valueObj instanceof Integer) {
+            value = (Integer) valueObj;
+        } else {
+            try {
+                value = Integer.parseInt(valueObj.toString());
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(
+                    String.format("Invalid integer value for parameter '%s': %s", paramName, valueObj), e);
+            }
+        }
         
         if (value < minValue || value > maxValue) {
             throw new IllegalArgumentException(
@@ -96,6 +106,7 @@ public final class ParameterValidator {
      * @param paramName Parameter name
      * @param defaultValue Default value if parameter not present
      * @return Parameter value or default
+     * @throws IllegalArgumentException if parameter value cannot be parsed as an integer
      */
     public static int getIntegerOrDefault(Map<String, Object> parameters, String paramName, int defaultValue) {
         if (!parameters.containsKey(paramName)) {
@@ -105,10 +116,17 @@ public final class ParameterValidator {
         Object valueObj = parameters.get(paramName);
         if (valueObj instanceof Integer) {
             return (Integer) valueObj;
-        } else if (valueObj instanceof String) {
-            return Integer.parseInt((String) valueObj);
-        } else {
-            return Integer.parseInt(valueObj.toString());
+        }
+        
+        try {
+            if (valueObj instanceof String) {
+                return Integer.parseInt((String) valueObj);
+            } else {
+                return Integer.parseInt(valueObj.toString());
+            }
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                String.format("Invalid integer value for parameter '%s': %s", paramName, valueObj), e);
         }
     }
     
