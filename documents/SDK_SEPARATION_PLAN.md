@@ -105,11 +105,11 @@ vajraedge/
 
 **Dependencies**: NONE (zero external dependencies)
 
-**Package**: `com.vajraedge.sdk`
+**Package**: `net.vajraedge.sdk`
 
 **Contents**:
 ```
-com.vajraedge.sdk/
+net.vajraedge.sdk/
 ├── Task.java                    # Core task interface
 ├── TaskResult.java              # Result interface
 ├── TaskPlugin.java              # Plugin marker interface
@@ -124,7 +124,7 @@ com.vajraedge.sdk/
 **Maven Coordinates**:
 ```xml
 <dependency>
-    <groupId>com.vajraedge</groupId>
+    <groupId>net.vajraedge</groupId>
     <artifactId>vajraedge-sdk</artifactId>
     <version>1.0.0</version>
 </dependency>
@@ -143,11 +143,11 @@ com.vajraedge.sdk/
 - WebSocket
 - Metrics
 
-**Package**: `com.vajraedge.perftest`
+**Package**: `net.vajraedge.perftest`
 
 **Contents**:
 ```
-com.vajraedge.perftest/
+net.vajraedge.perftest/
 ├── controller/          # REST API endpoints
 ├── service/             # Business logic
 ├── executor/            # Local task execution
@@ -172,11 +172,11 @@ com.vajraedge.perftest/
 - gRPC client
 - Minimal logging
 
-**Package**: `com.vajraedge.worker`
+**Package**: `net.vajraedge.worker`
 
 **Contents**:
 ```
-com.vajraedge.worker/
+net.vajraedge.worker/
 ├── Worker.java                  # Main worker bootstrap
 ├── TaskExecutor.java            # Virtual thread executor
 ├── GrpcClient.java              # Controller communication
@@ -201,11 +201,11 @@ com.vajraedge.worker/
 - gRPC libraries (for gRPC plugins)
 - Database drivers (for DB plugins)
 
-**Package**: `com.vajraedge.plugins`
+**Package**: `net.vajraedge.plugins`
 
 **Contents**:
 ```
-com.vajraedge.plugins/
+net.vajraedge.plugins/
 ├── http/
 │   ├── HttpGetTask.java         # HTTP GET plugin
 │   ├── HttpPostTask.java        # HTTP POST plugin
@@ -250,7 +250,7 @@ plugins {
 subprojects {
     apply plugin: 'java'
     
-    group = 'com.vajraedge'
+    group = 'net.vajraedge'
     version = '1.0.0'
     
     java {
@@ -295,7 +295,7 @@ jar {
         attributes(
             'Implementation-Title': 'VajraEdge SDK',
             'Implementation-Version': version,
-            'Automatic-Module-Name': 'com.vajraedge.sdk'
+            'Automatic-Module-Name': 'net.vajraedge.sdk'
         )
     }
 }
@@ -303,7 +303,7 @@ jar {
 publishing {
     publications {
         maven(MavenPublication) {
-            groupId = 'com.vajraedge'
+            groupId = 'net.vajraedge'
             artifactId = 'vajraedge-sdk'
             version = version
             from components.java
@@ -334,23 +334,23 @@ git mv src/main/java/com/vajraedge/perftest/sdk/* \
 #### Step 3: Update Package Declarations
 ```java
 // Before (in core)
-package com.vajraedge.perftest.core;
+package net.vajraedge.perftest.core;
 
 // After (in SDK)
-package com.vajraedge.sdk;
+package net.vajraedge.sdk;
 ```
 
 #### Step 4: Update Imports Throughout Codebase
 ```java
 // Before
-import com.vajraedge.perftest.core.Task;
-import com.vajraedge.perftest.core.TaskResult;
-import com.vajraedge.perftest.sdk.TaskPlugin;
+import net.vajraedge.perftest.core.Task;
+import net.vajraedge.perftest.core.TaskResult;
+import net.vajraedge.perftest.sdk.TaskPlugin;
 
 // After
-import com.vajraedge.sdk.Task;
-import com.vajraedge.sdk.TaskResult;
-import com.vajraedge.sdk.TaskPlugin;
+import net.vajraedge.sdk.Task;
+import net.vajraedge.sdk.TaskResult;
+import net.vajraedge.sdk.TaskPlugin;
 ```
 
 ---
@@ -389,7 +389,7 @@ dependencies {
 }
 
 application {
-    mainClass = 'com.vajraedge.perftest.Application'
+    mainClass = 'net.vajraedge.perftest.Application'
 }
 ```
 
@@ -434,13 +434,13 @@ dependencies {
 }
 
 application {
-    mainClass = 'com.vajraedge.worker.Worker'
+    mainClass = 'net.vajraedge.worker.Worker'
 }
 ```
 
 #### Step 2: Implement Worker Bootstrap
 ```java
-package com.vajraedge.worker;
+package net.vajraedge.worker;
 
 /**
  * Worker node that executes tasks from controller.
@@ -535,8 +535,8 @@ git mv vajraedge-core/src/main/java/com/vajraedge/perftest/plugins/HttpGetTaskPl
         vajraedge-plugins/src/main/java/com/vajraedge/plugins/http/HttpGetTask.java
 
 # Update package
-# From: package com.vajraedge.perftest.plugins;
-# To:   package com.vajraedge.plugins.http;
+# From: package net.vajraedge.perftest.plugins;
+# To:   package net.vajraedge.plugins.http;
 ```
 
 ---
@@ -553,7 +553,7 @@ cd vajraedge-worker-template
 ```gradle
 // build.gradle
 dependencies {
-    implementation 'com.vajraedge:vajraedge-sdk:1.0.0'
+    implementation 'net.vajraedge:vajraedge-sdk:1.0.0'
     
     // Add your dependencies
     implementation 'your-library:1.0.0'
@@ -564,8 +564,8 @@ dependencies {
 ```java
 package com.mycompany.loadtest;
 
-import com.vajraedge.sdk.*;
-import com.vajraedge.sdk.annotations.VajraTask;
+import net.vajraedge.sdk.*;
+import net.vajraedge.sdk.annotations.VajraTask;
 
 @VajraTask(
     name = "MY_API_CALL",

@@ -1,0 +1,62 @@
+// VajraEdge SDK - Lightweight task interface for load testing
+// Zero external dependencies - pure Java 21
+
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+description = 'VajraEdge SDK - Core interfaces for task plugins and workers'
+
+dependencies {
+    // ZERO external dependencies - pure Java 21
+    // This keeps the SDK lightweight for plugin developers
+}
+
+jar {
+    manifest {
+        attributes(
+            'Implementation-Title': 'VajraEdge SDK',
+            'Implementation-Version': version,
+            'Automatic-Module-Name': 'net.vajraedge.sdk',
+            'Created-By': 'Gradle ' + gradle.gradleVersion,
+            'Build-Jdk': System.getProperty('java.version'),
+            'License': 'Apache-2.0'
+        )
+    }
+}
+
+// Maven publishing configuration (for future Maven Central distribution)
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = 'net.vajraedge'
+            artifactId = 'vajraedge-sdk'
+            version = version
+            from components.java
+            
+            pom {
+                name = 'VajraEdge SDK'
+                description = 'Lightweight SDK for building VajraEdge task plugins and workers'
+                url = 'https://github.com/happysantoo/vajraedge'
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'happysantoo'
+                        name = 'Santhosh Kuppusamy'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:git://github.com/happysantoo/vajraedge.git'
+                    developerConnection = 'scm:git:ssh://github.com/happysantoo/vajraedge.git'
+                    url = 'https://github.com/happysantoo/vajraedge'
+                }
+            }
+        }
+    }
+}

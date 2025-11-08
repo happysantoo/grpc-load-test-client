@@ -187,7 +187,7 @@ Priority 4: Initial State (<10 users)
 ```
 Package                           Before    After    Change
 ─────────────────────────────────────────────────────────
-com.vajraedge.perftest.service      68%      77%      +9%
+net.vajraedge.perftest.service      68%      77%      +9%
 Overall Project                     71%      74%      +3%
 ```
 

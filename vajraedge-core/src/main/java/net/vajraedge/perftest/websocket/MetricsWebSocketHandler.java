@@ -1,0 +1,118 @@
+package net.vajraedge.perftest.websocket;
+
+import net.vajraedge.perftest.dto.MetricsResponse;
+import net.vajraedge.perftest.service.MetricsService;
+import net.vajraedge.perftest.service.TestExecutionService;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+/**
+ * WebSocket handler for broadcasting real-time metrics updates.
+ */
+@Component
+public class MetricsWebSocketHandler {
+    
+    private static final Logger logger = LoggerFactory.getLogger(MetricsWebSocketHandler.class);
+    
+    private final SimpMessagingTemplate messagingTemplate;
+    private final TestExecutionService testExecutionService;
+    private final MetricsService metricsService;
+   
+    
+    public MetricsWebSocketHandler(SimpMessagingTemplate messagingTemplate,
+                                   TestExecutionService testExecutionService,
+                                   MetricsService metricsService
+                                   ) {
+        this.messagingTemplate = messagingTemplate;
+        this.testExecutionService = testExecutionService;
+        this.metricsService = metricsService;
+        
+        logger.info("MetricsWebSocketHandler initialized");
+    }
+    
+    /**
+     * Broadcast metrics for all active tests every 500ms.
+     */
+    @Scheduled(fixedRate = 500)
+    public void broadcastMetrics() {
+        testExecutionService.getActiveTests().forEach((testId, execution) -> {
+            try {
+                MetricsResponse metrics = metricsService.convertToResponse(
+                    testId,
+                    execution.getMetricsCollector().getSnapshot()
+                );
+                
+                // Also include execution status
+                metrics.setActiveTasks((int) execution.getActiveTasks());
+                metrics.setPendingTasks(execution.getPendingTasks());
+                
+                // Broadcast to topic for this specific test
+                messagingTemplate.convertAndSend("/topic/metrics/" + testId, metrics);
+                
+                if (metrics.getTotalRequests() != null && metrics.getTotalRequests() > 0) {
+                    logger.debug("Broadcasted metrics for test {}: TPS={}, Total={}, Active={}, P50={}, P95={}",
+                        testId, 
+                        String.format("%.2f", metrics.getCurrentTps()), 
+                        metrics.getTotalRequests(),
+                        metrics.getActiveTasks(),
+                        metrics.getLatencyPercentiles() != null ? 
+                            String.format("%.2f", metrics.getLatencyPercentiles().get("p50")) : "null",
+                        metrics.getLatencyPercentiles() != null ? 
+                            String.format("%.2f", metrics.getLatencyPercentiles().get("p95")) : "null");
+                } else {
+                    logger.debug("Metrics for test {} have zero requests", testId);
+                }
+                
+            } catch (Exception e) {
+                logger.error("Error broadcasting metrics for test {}", testId, e);
+            }
+        });
+    }
+    
+    /**
+     * Send a test status update (start, stop, complete).
+     */
+    public void sendTestStatusUpdate(String testId, String status, Object data) {
+        try {
+            var message = new TestStatusUpdate(testId, status, System.currentTimeMillis(), data);
+            messagingTemplate.convertAndSend("/topic/status/" + testId, message);
+            logger.info("Sent status update for test {}: {}", testId, status);
+        } catch (Exception e) {
+            logger.error("Error sending status update for test {}", testId, e);
+        }
+    }
+    
+    /**
+     * Message class for test status updates.
+     */
+    public static class TestStatusUpdate {
+        private String testId;
+        private String status;
+        private long timestamp;
+        private Object data;
+        
+        public TestStatusUpdate(String testId, String status, long timestamp, Object data) {
+            this.testId = testId;
+            this.status = status;
+            this.timestamp = timestamp;
+            this.data = data;
+        }
+        
+        // Getters and setters
+        public String getTestId() { return testId; }
+        public void setTestId(String testId) { this.testId = testId; }
+        
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
+        
+        public long getTimestamp() { return timestamp; }
+        public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
+        
+        public Object getData() { return data; }
+        public void setData(Object data) { this.data = data; }
+    }
+}

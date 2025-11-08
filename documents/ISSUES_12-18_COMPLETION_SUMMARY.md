@@ -36,7 +36,7 @@ Successfully completed all code quality improvement issues (#12-18) identified i
 
 **New Constants File**:
 ```java
-package com.vajraedge.perftest.constants;
+package net.vajraedge.perftest.constants;
 
 public final class PerformanceTestConstants {
     // Concurrency Limits
@@ -139,7 +139,7 @@ public final class PerformanceTestConstants {
 
 **New TaskType Enum**:
 ```java
-package com.vajraedge.perftest.constants;
+package net.vajraedge.perftest.constants;
 
 /**
  * Enumeration of supported task types for VajraEdge performance testing.
@@ -315,12 +315,12 @@ log.error("Network check failed - DNS resolution failed for host: {}", host, e);
 ### New Files Created (2 files, 282 lines)
 
 1. **TaskType.java** (100 lines)
-   - Package: `com.vajraedge.perftest.constants`
+   - Package: `net.vajraedge.perftest.constants`
    - Purpose: Type-safe task type enumeration
    - Key Features: fromString(), isValid(), isHttpTask() methods
 
 2. **PerformanceTestConstants.java** (182 lines)
-   - Package: `com.vajraedge.perftest.constants`
+   - Package: `net.vajraedge.perftest.constants`
    - Purpose: Centralized configuration constants
    - Categories: Concurrency, TPS, Duration, Metrics, Executor, HTTP, Sleep, Validation, WebSocket
 

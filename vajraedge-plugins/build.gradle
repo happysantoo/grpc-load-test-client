@@ -1,0 +1,37 @@
+// VajraEdge Plugins - Example plugin implementations
+
+plugins {
+    id 'java-library'
+}
+
+description = 'VajraEdge Plugins - Example plugin implementations'
+
+jar {
+    manifest {
+        attributes(
+            'Implementation-Title': 'VajraEdge Plugins',
+            'Implementation-Version': version,
+            'License': 'Apache-2.0'
+        )
+    }
+}
+
+dependencies {
+    // SDK dependency only
+    api project(':vajraedge-sdk')
+    
+    // HTTP client for HTTP plugins
+    implementation 'org.apache.httpcomponents.client5:httpclient5:5.3'
+    
+    // gRPC for gRPC plugins
+    compileOnly "io.grpc:grpc-netty-shaded:${rootProject.ext.grpcVersion}"
+    compileOnly "io.grpc:grpc-stub:${rootProject.ext.grpcVersion}"
+    
+    // Database drivers (examples - compile only)
+    compileOnly 'org.postgresql:postgresql:42.7.1'
+    compileOnly 'org.mongodb:mongodb-driver-sync:4.11.1'
+    
+    // Testing
+    testImplementation "org.junit.jupiter:junit-jupiter:${rootProject.ext.junitVersion}"
+    testImplementation 'org.assertj:assertj-core:3.26.3'
+}

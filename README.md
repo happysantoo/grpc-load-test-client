@@ -11,6 +11,7 @@
   [![Java 21](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.java.net/projects/jdk/21/)
   [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.7-brightgreen.svg)](https://spring.io/projects/spring-boot)
   [![Virtual Threads](https://img.shields.io/badge/Virtual%20Threads-Enabled-blue.svg)](https://openjdk.org/jeps/444)
+  [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
   
   **Modern • Production-Ready • Real-Time Metrics**
   
@@ -33,6 +34,76 @@ VajraEdge is a modern, production-ready performance testing framework built with
 - 🧩 **Simple Task Interface**: Benchmark anything by implementing one method
 - 🎨 **Modern UI**: Bootstrap 5 + Chart.js with responsive design
 - 🔍 **Pre-Flight Validation**: Automatic system health checks before test execution
+- 🔧 **Modular Architecture**: Separate SDK, Core, Worker, and Plugins modules
+- 📦 **Lightweight SDK**: 9KB JAR with zero dependencies for custom plugins
+
+## 🏗️ Architecture
+
+VajraEdge uses a modular architecture designed for extensibility and distributed testing:
+
+```
+vajraedge/
+├── vajraedge-sdk/          # Core SDK (9KB, zero dependencies)
+│   └── Task interfaces, annotations, metadata
+├── vajraedge-core/         # Main controller application (Spring Boot)
+│   └── REST API, WebSocket, metrics, validation
+├── vajraedge-worker/       # Worker template for distributed testing
+│   └── Task executor, gRPC client, metrics reporter
+└── vajraedge-plugins/      # Example plugin implementations
+    └── HTTP, gRPC, Database task examples
+```
+
+### Module Details
+
+**vajraedge-sdk** (9KB JAR)
+- Pure Java 21, zero external dependencies
+- Core interfaces: `Task`, `TaskPlugin`, `TaskResult`
+- Annotations: `@VajraTask`, `@TaskParameter`
+- Use this to build custom plugins or workers
+
+**vajraedge-core** (46MB JAR with Spring Boot)
+- Main controller application with web dashboard
+- REST API for test management
+- Real-time metrics via WebSocket
+- Pre-flight validation
+- Plugin discovery and registration
+
+**vajraedge-worker** (16KB JAR)
+- Template for building custom workers
+- Virtual thread task executor (10K+ concurrent tasks)
+- gRPC client for controller communication
+- Configurable via CLI or environment variables
+- Deploy standalone or in containers
+
+**vajraedge-plugins** (17KB JAR)
+- Example implementations: HTTP GET/POST, Sleep
+- Reference implementations: gRPC, PostgreSQL
+- Shows best practices for plugin development
+
+### Building Custom Workers
+
+1. Create new Gradle project
+2. Add SDK dependency:
+```gradle
+dependencies {
+    implementation 'net.vajraedge:vajraedge-sdk:1.0.0'
+}
+```
+
+3. Implement your custom plugins:
+```java
+@VajraTask(name = "MY_TASK", category = "CUSTOM")
+public class MyCustomTask implements TaskPlugin {
+    @Override
+    public TaskResult execute() throws Exception {
+        // Your task logic here
+    }
+}
+```
+
+4. Use worker template or integrate with controller
+
+See [Worker README](vajraedge-worker/README.md) and [Plugin README](vajraedge-plugins/README.md) for details.
 
 ## 🔍 Pre-Flight Validation
 
@@ -198,26 +269,201 @@ public class CustomCheck implements ValidationCheck {
 
 The framework will automatically discover and run your check.
 
+## 🎭 Test Suites
+
+Test Suites enable complex, multi-scenario performance testing with support for sequential/parallel execution, task mixes, and data correlation.
+
+### Overview
+
+A **Test Suite** contains multiple **Test Scenarios** that can execute:
+- **Sequentially**: One after another (setup → test → teardown)
+- **In Parallel**: All scenarios run simultaneously
+
+### Key Capabilities
+
+**Task Mix (Weighted Distribution)**
+```json
+{
+  "taskMix": {
+    "weights": {
+      "HTTP_GET": 70,
+      "HTTP_POST": 20,
+      "HTTP_DELETE": 10
+    }
+  }
+}
+```
+Simulates realistic load patterns where different operations occur with different frequencies.
+
+**Data Correlation**
+```java
+// Scenario 1: Create users
+context.addToPool("userIds", "user-001");
+
+// Scenario 2: Use those users
+String userId = context.getFromPool("userIds");
+```
+Share data between scenarios for complex testing flows (e.g., create → read → update → delete).
+
+### API Endpoints
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/api/suites/start` | Start a new test suite |
+| GET | `/api/suites/{suiteId}/status` | Get real-time status |
+| GET | `/api/suites/{suiteId}/results` | Get final results |
+| DELETE | `/api/suites/{suiteId}/stop` | Stop running suite |
+
+### Example: Sequential User Journey
+
+```json
+POST /api/suites/start
+{
+  "suiteId": "user-journey-suite",
+  "name": "Complete User Journey",
+  "executionMode": "SEQUENTIAL",
+  "useCorrelation": true,
+  "scenarios": [
+    {
+      "scenarioId": "create-users",
+      "name": "User Registration",
+      "config": {
+        "taskType": "HTTP_POST",
+        "taskParameter": "https://api.example.com/users",
+        "maxConcurrency": 10,
+        "testDurationSeconds": 30
+      }
+    },
+    {
+      "scenarioId": "user-login",
+      "name": "User Authentication",
+      "config": {
+        "taskType": "HTTP_POST",
+        "taskParameter": "https://api.example.com/login",
+        "maxConcurrency": 50,
+        "testDurationSeconds": 60
+      }
+    }
+  ]
+}
+```
+
+### Example: Parallel Load with Task Mix
+
+```json
+POST /api/suites/start
+{
+  "suiteId": "mixed-load",
+  "name": "Realistic E-Commerce Load",
+  "executionMode": "PARALLEL",
+  "scenarios": [
+    {
+      "scenarioId": "read-heavy",
+      "name": "Browse-Heavy Users",
+      "config": {
+        "taskType": "HTTP_GET",
+        "maxConcurrency": 100,
+        "testDurationSeconds": 300
+      },
+      "taskMix": {
+        "weights": {
+          "LIST_PRODUCTS": 70,
+          "VIEW_PRODUCT": 20,
+          "SEARCH": 10
+        }
+      }
+    },
+    {
+      "scenarioId": "write-heavy",
+      "name": "Purchase-Heavy Users",
+      "config": {
+        "taskType": "HTTP_POST",
+        "maxConcurrency": 20,
+        "testDurationSeconds": 300
+      },
+      "taskMix": {
+        "weights": {
+          "ADD_TO_CART": 50,
+          "CHECKOUT": 30,
+          "UPDATE_CART": 20
+        }
+      }
+    }
+  ]
+}
+```
+
+**Result**: Simultaneous execution of browse-heavy and purchase-heavy patterns, mimicking real e-commerce traffic.
+
+### Suite Status Response
+
+```json
+GET /api/suites/{suiteId}/status
+{
+  "suiteId": "user-journey-suite",
+  "status": "RUNNING",
+  "executionMode": "SEQUENTIAL",
+  "totalScenarios": 2,
+  "completedScenarios": 1,
+  "successfulScenarios": 1,
+  "progress": 50.0,
+  "scenarios": [
+    {
+      "scenarioId": "create-users",
+      "status": "COMPLETED",
+      "durationMillis": 30542,
+      "metrics": {
+        "totalRequests": 1250,
+        "successfulRequests": 1248,
+        "currentTps": 41.2
+      }
+    },
+    {
+      "scenarioId": "user-login",
+      "status": "RUNNING"
+    }
+  ]
+}
+```
+
+For detailed documentation, see [TASK_11_SUMMARY.md](documents/TASK_11_SUMMARY.md).
+
 ## 🏃 Quick Start
 
 ### Prerequisites
 - Java 21 or higher
-- Gradle (wrapper included)
+- Gradle 8.5+ (wrapper included)
 
-### Run the Application
+### Run the Controller Application
 
 ```bash
-# Build the project
-./gradlew clean build
+# Build all modules (SDK, Core, Worker, Plugins)
+./gradlew build
 
-# Start the server
-./gradlew bootRun
+# Start the controller with web dashboard
+./gradlew :vajraedge-core:bootRun
 
 # Access the dashboard
 open http://localhost:8080
 ```
 
 That's it! The dashboard will open in your browser.
+
+### Build Individual Modules
+
+```bash
+# Build just the SDK
+./gradlew :vajraedge-sdk:build
+
+# Build worker template
+./gradlew :vajraedge-worker:build
+
+# Build plugins
+./gradlew :vajraedge-plugins:build
+
+# List all modules
+./gradlew projects
+```
 
 ## 📖 Using the Dashboard
 
@@ -531,6 +777,8 @@ Average latency can be misleading. P95 and P99 percentiles show you the worst-ca
 
 ## 🤝 Contributing
 
+Contributions are welcome! VajraEdge is open source under the Apache 2.0 license.
+
 To add a new task type:
 1. Implement the `Task` interface
 2. Add factory case in `TestExecutionService`
@@ -539,11 +787,26 @@ To add a new task type:
 
 ## 📝 License
 
-This is an example project for educational purposes.
+Copyright 2025 VajraEdge Contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 ## 🙋 Support
 
-For issues or questions, check the documentation in the `documents/` folder.
+For issues or questions:
+- Check the documentation in the `documents/` folder
+- Open an issue on GitHub
+- Review the examples in `vajraedge-plugins/`
 
 ---
 
