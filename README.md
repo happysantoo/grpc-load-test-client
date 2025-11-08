@@ -49,8 +49,8 @@ repositories {
 }
 
 dependencies {
-    // SDK module from JitPack (zero dependencies, 9KB)
-    implementation 'com.github.happysantoo:vajraedge:vajraedge-sdk:v0.9.1'
+    // SDK module from JitPack (zero dependencies, 13KB + sources + javadoc)
+    implementation 'com.github.happysantoo:vajraedge:vajraedge-sdk:v0.9.3'
 }
 ```
 
@@ -67,7 +67,7 @@ dependencies {
     <dependency>
         <groupId>com.github.happysantoo</groupId>
         <artifactId>vajraedge</artifactId>
-        <version>v0.9.1</version>
+        <version>v0.9.3</version>
         <classifier>vajraedge-sdk</classifier>
     </dependency>
 </dependencies>
@@ -132,7 +132,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.happysantoo:vajraedge:vajraedge-sdk:v0.9.1'
+    implementation 'com.github.happysantoo:vajraedge:vajraedge-sdk:v0.9.3'
 }
 ```
 
