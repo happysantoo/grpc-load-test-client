@@ -269,6 +269,165 @@ public class CustomCheck implements ValidationCheck {
 
 The framework will automatically discover and run your check.
 
+## 🎭 Test Suites
+
+Test Suites enable complex, multi-scenario performance testing with support for sequential/parallel execution, task mixes, and data correlation.
+
+### Overview
+
+A **Test Suite** contains multiple **Test Scenarios** that can execute:
+- **Sequentially**: One after another (setup → test → teardown)
+- **In Parallel**: All scenarios run simultaneously
+
+### Key Capabilities
+
+**Task Mix (Weighted Distribution)**
+```json
+{
+  "taskMix": {
+    "weights": {
+      "HTTP_GET": 70,
+      "HTTP_POST": 20,
+      "HTTP_DELETE": 10
+    }
+  }
+}
+```
+Simulates realistic load patterns where different operations occur with different frequencies.
+
+**Data Correlation**
+```java
+// Scenario 1: Create users
+context.addToPool("userIds", "user-001");
+
+// Scenario 2: Use those users
+String userId = context.getFromPool("userIds");
+```
+Share data between scenarios for complex testing flows (e.g., create → read → update → delete).
+
+### API Endpoints
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/api/suites/start` | Start a new test suite |
+| GET | `/api/suites/{suiteId}/status` | Get real-time status |
+| GET | `/api/suites/{suiteId}/results` | Get final results |
+| DELETE | `/api/suites/{suiteId}/stop` | Stop running suite |
+
+### Example: Sequential User Journey
+
+```json
+POST /api/suites/start
+{
+  "suiteId": "user-journey-suite",
+  "name": "Complete User Journey",
+  "executionMode": "SEQUENTIAL",
+  "useCorrelation": true,
+  "scenarios": [
+    {
+      "scenarioId": "create-users",
+      "name": "User Registration",
+      "config": {
+        "taskType": "HTTP_POST",
+        "taskParameter": "https://api.example.com/users",
+        "maxConcurrency": 10,
+        "testDurationSeconds": 30
+      }
+    },
+    {
+      "scenarioId": "user-login",
+      "name": "User Authentication",
+      "config": {
+        "taskType": "HTTP_POST",
+        "taskParameter": "https://api.example.com/login",
+        "maxConcurrency": 50,
+        "testDurationSeconds": 60
+      }
+    }
+  ]
+}
+```
+
+### Example: Parallel Load with Task Mix
+
+```json
+POST /api/suites/start
+{
+  "suiteId": "mixed-load",
+  "name": "Realistic E-Commerce Load",
+  "executionMode": "PARALLEL",
+  "scenarios": [
+    {
+      "scenarioId": "read-heavy",
+      "name": "Browse-Heavy Users",
+      "config": {
+        "taskType": "HTTP_GET",
+        "maxConcurrency": 100,
+        "testDurationSeconds": 300
+      },
+      "taskMix": {
+        "weights": {
+          "LIST_PRODUCTS": 70,
+          "VIEW_PRODUCT": 20,
+          "SEARCH": 10
+        }
+      }
+    },
+    {
+      "scenarioId": "write-heavy",
+      "name": "Purchase-Heavy Users",
+      "config": {
+        "taskType": "HTTP_POST",
+        "maxConcurrency": 20,
+        "testDurationSeconds": 300
+      },
+      "taskMix": {
+        "weights": {
+          "ADD_TO_CART": 50,
+          "CHECKOUT": 30,
+          "UPDATE_CART": 20
+        }
+      }
+    }
+  ]
+}
+```
+
+**Result**: Simultaneous execution of browse-heavy and purchase-heavy patterns, mimicking real e-commerce traffic.
+
+### Suite Status Response
+
+```json
+GET /api/suites/{suiteId}/status
+{
+  "suiteId": "user-journey-suite",
+  "status": "RUNNING",
+  "executionMode": "SEQUENTIAL",
+  "totalScenarios": 2,
+  "completedScenarios": 1,
+  "successfulScenarios": 1,
+  "progress": 50.0,
+  "scenarios": [
+    {
+      "scenarioId": "create-users",
+      "status": "COMPLETED",
+      "durationMillis": 30542,
+      "metrics": {
+        "totalRequests": 1250,
+        "successfulRequests": 1248,
+        "currentTps": 41.2
+      }
+    },
+    {
+      "scenarioId": "user-login",
+      "status": "RUNNING"
+    }
+  ]
+}
+```
+
+For detailed documentation, see [TASK_11_SUMMARY.md](documents/TASK_11_SUMMARY.md).
+
 ## 🏃 Quick Start
 
 ### Prerequisites
