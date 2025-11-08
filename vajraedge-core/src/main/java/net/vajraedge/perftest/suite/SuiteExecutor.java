@@ -238,12 +238,8 @@ public class SuiteExecutor {
                     && !"FAILED".equals(testStatus.getStatus()) 
                     && !"STOPPED".equals(testStatus.getStatus()));
             
-            // Get metrics from the test execution
-            TestExecutionService.TestExecution testExec = testExecutionService.getActiveTests().get(testId);
-            if (testExec != null && testExec.getMetricsCollector() != null) {
-                MetricsSnapshot snapshot = testExec.getMetricsCollector().getSnapshot();
-                metrics = snapshot;
-            }
+            // Get metrics from the test execution using public API
+            metrics = testExecutionService.getTestMetrics(testId);
             
             if (status != ScenarioResult.ScenarioStatus.STOPPED) {
                 status = ScenarioResult.ScenarioStatus.COMPLETED;

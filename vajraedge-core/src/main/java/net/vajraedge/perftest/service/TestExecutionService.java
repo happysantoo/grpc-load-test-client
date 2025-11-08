@@ -198,6 +198,22 @@ public class TestExecutionService {
         return metricsService.convertToResponse(testId, snapshot);
     }
     
+    /**
+     * Get metrics snapshot for a specific test.
+     * 
+     * @param testId test identifier
+     * @return MetricsSnapshot or null if test not found
+     */
+    public net.vajraedge.perftest.metrics.MetricsSnapshot getTestMetrics(String testId) {
+        TestExecution execution = activeTests.get(testId);
+        if (execution == null) {
+            return null;
+        }
+        
+        MetricsCollector collector = execution.getMetricsCollector();
+        return collector != null ? collector.getSnapshot() : null;
+    }
+    
     private TestStatusResponse buildStatusResponse(TestExecution execution) {
         TestStatusResponse response = new TestStatusResponse();
         response.setTestId(execution.getTestId());
