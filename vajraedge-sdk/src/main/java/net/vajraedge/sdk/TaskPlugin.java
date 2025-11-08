@@ -7,7 +7,7 @@ import java.util.Map;
  * Implement this interface to create discoverable task plugins.
  * 
  * <p>Plugins are automatically discovered via classpath scanning
- * when annotated with {@link VajraTask}.</p>
+ * when annotated with {@link net.vajraedge.sdk.annotations.VajraTask}.</p>
  * 
  * <p>Example usage:</p>
  * <pre>{@code

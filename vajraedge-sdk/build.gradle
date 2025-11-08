@@ -8,6 +8,17 @@ plugins {
 
 description = 'VajraEdge SDK - Core interfaces for task plugins and workers'
 
+// Generate sources and javadoc JARs for distribution
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+// Configure javadoc to be lenient (ignore warnings for now)
+tasks.withType(Javadoc) {
+    options.addStringOption('Xdoclint:none', '-quiet')
+}
+
 dependencies {
     // ZERO external dependencies - pure Java 21
     // This keeps the SDK lightweight for plugin developers
