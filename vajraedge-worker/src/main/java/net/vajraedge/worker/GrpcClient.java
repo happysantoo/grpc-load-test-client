@@ -54,8 +54,8 @@ public class GrpcClient {
         //     .usePlaintext()
         //     .build();
         
-        // Simulate connection
-        Thread.sleep(100);
+        // STUB: Simulate connection (non-blocking for now)
+        // Full implementation with proper gRPC in Task 9 (Distributed Testing)
         connected = true;
         
         log.info("Connected to controller");
@@ -101,8 +101,8 @@ public class GrpcClient {
         // 
         // RegisterWorkerResponse response = stub.registerWorker(request);
         
-        // Simulate registration
-        Thread.sleep(50);
+        // STUB: Simulate registration (non-blocking for now)
+        // Full implementation with proper gRPC in Task 9 (Distributed Testing)
         
         log.info("Worker registered successfully");
     }
@@ -123,8 +123,8 @@ public class GrpcClient {
             // 
             // stub.unregisterWorker(request);
             
-            // Simulate unregistration
-            Thread.sleep(50);
+            // STUB: Simulate unregistration (non-blocking for now)
+            // Full implementation with proper gRPC in Task 9 (Distributed Testing)
             
             log.info("Worker unregistered successfully");
         } catch (Exception e) {
