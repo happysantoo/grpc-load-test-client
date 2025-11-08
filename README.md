@@ -49,7 +49,11 @@ repositories {
 }
 
 dependencies {
+    // Option 1: SDK only (recommended for plugin development)
     implementation 'com.github.happysantoo.vajraedge:vajraedge-sdk:0.9.0'
+    
+    // Option 2: Specific module from multimodule project  
+    // implementation 'com.github.happysantoo:vajraedge:vajraedge-sdk:0.9.0'
 }
 ```
 

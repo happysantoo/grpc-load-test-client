@@ -9,4 +9,4 @@ before_install:
   - sdk use java 21.0.1-open
 
 install:
-  - ./gradlew clean build publishToMavenLocal -x test
+  - ./gradlew clean :vajraedge-sdk:publishToMavenLocal -x test
