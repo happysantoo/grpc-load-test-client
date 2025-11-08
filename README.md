@@ -12,6 +12,7 @@
   [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.7-brightgreen.svg)](https://spring.io/projects/spring-boot)
   [![Virtual Threads](https://img.shields.io/badge/Virtual%20Threads-Enabled-blue.svg)](https://openjdk.org/jeps/444)
   [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+  [![JitPack](https://jitpack.io/v/happysantoo/vajraedge.svg)](https://jitpack.io/#happysantoo/vajraedge)
   
   **Modern • Production-Ready • Real-Time Metrics**
   
@@ -36,6 +37,43 @@ VajraEdge is a modern, production-ready performance testing framework built with
 - 🔍 **Pre-Flight Validation**: Automatic system health checks before test execution
 - 🔧 **Modular Architecture**: Separate SDK, Core, Worker, and Plugins modules
 - 📦 **Lightweight SDK**: 9KB JAR with zero dependencies for custom plugins
+
+## 📦 Using the SDK
+
+Add VajraEdge SDK to your project to build custom task plugins or workers:
+
+### Gradle
+```gradle
+repositories {
+    maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+    implementation 'com.github.happysantoo.vajraedge:vajraedge-sdk:0.9.0'
+}
+```
+
+### Maven
+```xml
+<repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+</repositories>
+
+<dependencies>
+    <dependency>
+        <groupId>com.github.happysantoo.vajraedge</groupId>
+        <artifactId>vajraedge-sdk</artifactId>
+        <version>0.9.0</version>
+    </dependency>
+</dependencies>
+```
+
+**Latest Version:** [![JitPack](https://jitpack.io/v/happysantoo/vajraedge.svg)](https://jitpack.io/#happysantoo/vajraedge)
+
+See [Building Custom Workers](#building-custom-workers) section below for usage examples.
 
 ## 🏗️ Architecture
 
@@ -83,10 +121,14 @@ vajraedge/
 ### Building Custom Workers
 
 1. Create new Gradle project
-2. Add SDK dependency:
+2. Add SDK dependency (via JitPack):
 ```gradle
+repositories {
+    maven { url 'https://jitpack.io' }
+}
+
 dependencies {
-    implementation 'net.vajraedge:vajraedge-sdk:1.0.0'
+    implementation 'com.github.happysantoo.vajraedge:vajraedge-sdk:0.9.0'
 }
 ```
 
