@@ -239,9 +239,9 @@ public class TaskDistributor {
             }
         }
         
-        // Create new channel
-        // TODO: Extract host:port from worker metadata or configuration
-        String target = worker.getHostname() + ":9090"; // Default gRPC port
+        // Get worker address from metadata
+        String target = worker.getMetadata().getOrDefault("worker.address", 
+                                                          worker.getHostname() + ":9091");
         
         ManagedChannel channel = ManagedChannelBuilder
                 .forTarget(target)

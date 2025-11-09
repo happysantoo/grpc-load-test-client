@@ -8,7 +8,9 @@ import net.vajraedge.perftest.proto.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -126,15 +128,22 @@ public class GrpcClient {
      * @param workerId Worker identifier
      * @param capabilities Available task types
      * @param maxConcurrency Maximum concurrent tasks
+     * @param workerPort Worker's gRPC server port
      * @throws Exception if registration fails
      */
-    public void registerWorker(String workerId, List<String> capabilities, int maxConcurrency) 
+    public void registerWorker(String workerId, List<String> capabilities, int maxConcurrency, int workerPort) 
             throws Exception {
-        log.info("Registering worker: id={}, capabilities={}, maxConcurrency={}", 
-            workerId, capabilities, maxConcurrency);
+        log.info("Registering worker: id={}, capabilities={}, maxConcurrency={}, port={}", 
+            workerId, capabilities, maxConcurrency, workerPort);
         
         try {
             String hostname = java.net.InetAddress.getLocalHost().getHostName();
+            
+            // Build metadata with worker's gRPC address
+            Map<String, String> metadata = new HashMap<>();
+            metadata.put("worker.host", hostname);
+            metadata.put("worker.port", String.valueOf(workerPort));
+            metadata.put("worker.address", "127.0.0.1:" + workerPort); // Use 127.0.0.1 to force IPv4
             
             WorkerRegistrationRequest request = WorkerRegistrationRequest.newBuilder()
                 .setWorkerId(workerId)
@@ -142,6 +151,7 @@ public class GrpcClient {
                 .setMaxCapacity(maxConcurrency)
                 .addAllSupportedTaskTypes(capabilities)
                 .setVersion("1.0.0")
+                .putAllMetadata(metadata)
                 .build();
             
             WorkerRegistrationResponse response = blockingStub.registerWorker(request);

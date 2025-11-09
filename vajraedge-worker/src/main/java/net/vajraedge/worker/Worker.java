@@ -44,6 +44,7 @@ public class Worker {
     private final TaskAssignmentHandler assignmentHandler;
     private final MetricsReporter metricsReporter;
     private final HeartbeatSender heartbeatSender;
+    private final WorkerGrpcServer grpcServer;
     private final CountDownLatch shutdownLatch;
     private final String testId; // TODO: Make this configurable
     
@@ -65,6 +66,7 @@ public class Worker {
         this.grpcClient = new GrpcClient(config.getControllerAddress());
         this.taskExecutor = new TaskExecutorService(config.getMaxConcurrency());
         this.assignmentHandler = new TaskAssignmentHandler(taskRegistry, taskExecutor, grpcClient);
+        this.grpcServer = new WorkerGrpcServer(config.getGrpcPort(), assignmentHandler);
         this.metricsReporter = new MetricsReporter(config.getWorkerId(), testId, grpcClient, taskExecutor);
         this.heartbeatSender = new HeartbeatSender(config.getWorkerId(), grpcClient, taskExecutor);
         this.shutdownLatch = new CountDownLatch(1);
@@ -96,6 +98,10 @@ public class Worker {
             config.getMaxConcurrency());
         
         try {
+            // Start worker's gRPC server to receive task assignments
+            grpcServer.start();
+            log.info("Worker gRPC server started on port {}", config.getGrpcPort());
+            
             // Connect to controller
             grpcClient.connect();
             log.info("Connected to controller: {}", config.getControllerAddress());
@@ -104,7 +110,8 @@ public class Worker {
             grpcClient.registerWorker(
                 config.getWorkerId(), 
                 config.getCapabilities(),
-                config.getMaxConcurrency()
+                config.getMaxConcurrency(),
+                config.getGrpcPort()
             );
             log.info("Worker registered successfully");
             // Start task executor
@@ -156,6 +163,9 @@ public class Worker {
             
             // Stop metrics reporting
             metricsReporter.stop();
+            
+            // Stop gRPC server
+            grpcServer.stop();
             
             // Wait for in-flight tasks to complete (with timeout)
             taskExecutor.awaitTermination(30);
