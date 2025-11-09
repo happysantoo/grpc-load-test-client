@@ -112,17 +112,33 @@ public class MetricsReporter {
      */
     private void reportMetrics() {
         try {
-            // Get metrics snapshot from executor
-            MetricsSnapshot snapshot = taskExecutor.getMetricsSnapshot();
-            
-            // Skip reporting if no tasks have been executed yet
-            if (snapshot.getTotalTasks() == 0) {
-                log.trace("No tasks executed yet, skipping metrics report");
+            // Get current test ID
+            String currentTestId = this.testId;
+            if (currentTestId == null) {
+                log.trace("No test ID set, skipping metrics report");
                 return;
             }
             
-            // Get percentile stats
+            // Get metrics snapshot for the specific test
+            MetricsSnapshot snapshot = taskExecutor.getMetricsSnapshot(currentTestId);
+            
+            // Skip reporting if no snapshot found or no tasks executed
+            if (snapshot == null || snapshot.getTotalTasks() == 0) {
+                log.trace("No metrics available for test {}, skipping report", currentTestId);
+                return;
+            }
+            
+            // Get percentile stats (handle empty case gracefully)
             PercentileStats percentiles = snapshot.getPercentiles();
+            double p50 = 0.0;
+            double p95 = 0.0;
+            double p99 = 0.0;
+            
+            if (percentiles != null) {
+                p50 = percentiles.getPercentile(0.5);
+                p95 = percentiles.getPercentile(0.95);
+                p99 = percentiles.getPercentile(0.99);
+            }
             
             // Create metrics snapshot
             LocalWorkerMetrics metrics = new LocalWorkerMetrics(
@@ -131,21 +147,23 @@ public class MetricsReporter {
                 snapshot.getFailedTasks(),
                 taskExecutor.getStats().activeTasks(),  // Get active from ExecutorStats
                 snapshot.getTps(),
-                percentiles.getPercentile(0.5),  // p50
-                percentiles.getPercentile(0.95), // p95
-                percentiles.getPercentile(0.99), // p99
+                p50,
+                p95,
+                p99,
                 System.currentTimeMillis()
             );
             
             // Send to controller
-            grpcClient.sendMetrics(workerId, testId, metrics);
+            grpcClient.sendMetrics(workerId, currentTestId, metrics);
             
-            log.debug("Metrics reported: workerId={}, completed={}, failed={}, active={}, tps={}", 
+            log.debug("Metrics reported: workerId={}, testId={}, completed={}, failed={}, active={}, tps={:.2f}, p50={:.2f}", 
                 workerId,
+                currentTestId,
                 metrics.completedTasks(), 
                 metrics.failedTasks(), 
                 metrics.activeTasks(),
-                metrics.currentTps());
+                metrics.currentTps(),
+                p50);
             
         } catch (Exception e) {
             log.error("Failed to report metrics", e);

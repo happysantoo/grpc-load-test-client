@@ -104,6 +104,9 @@ public class TaskAssignmentHandler {
             
             activeTests.put(testId, execution);
             
+            // Register test for isolated metrics tracking
+            executorService.registerTest(testId);
+            
             // Update metrics reporter to track this test
             metricsReporter.setTestId(testId);
             
@@ -180,6 +183,9 @@ public class TaskAssignmentHandler {
         log.info("Stopping test {}: graceful={}", testId, graceful);
         execution.stop(graceful);
         activeTests.remove(testId);
+        
+        // Unregister test and clean up metrics
+        executorService.unregisterTest(testId);
         
         return true;
     }
@@ -261,8 +267,8 @@ public class TaskAssignmentHandler {
                     // Calculate delay between tasks
                     long delayMs = currentTps > 0 ? 1000 / currentTps : 1000;
                     
-                    // Execute task
-                    executorService.submit(task);
+                    // Execute task with testId for metrics isolation
+                    executorService.submit(task, testId);
                     executedTasks++;
                     
                     // Sleep to maintain TPS
@@ -286,6 +292,9 @@ public class TaskAssignmentHandler {
             
             log.info("Test execution completed: testId={}, executedTasks={}, duration={}s, actualTps={}",
                     testId, executedTasks, actualDuration, String.format("%.2f", actualTps));
+            
+            // Cleanup metrics after test completes
+            executorService.unregisterTest(testId);
         }
     }
 }
