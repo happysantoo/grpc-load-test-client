@@ -74,27 +74,28 @@ vajraedge.metrics.aggregation-interval=500
 
 ### Worker Configuration
 
-Edit `vajraedge-worker/src/main/resources/application.properties`:
+Workers are configured via command-line arguments:
 
-```properties
-# Worker ID (unique identifier)
-vajraedge.worker.id=worker-001
+```bash
+java -jar vajraedge-worker.jar [OPTIONS]
 
-# Controller address
-vajraedge.controller.host=localhost
-vajraedge.controller.port=9090
+Options:
+  --worker-id=<id>              Unique worker identifier (required)
+  --controller-address=<addr>   Controller host:port (default: localhost:9090)
+  --max-concurrency=<num>       Maximum concurrent tasks (default: 10000)
+  --grpc-port=<port>           Worker gRPC server port (default: 9091)
+  --log-level=<level>          Logging level: DEBUG, INFO, WARN, ERROR (default: INFO)
+  --help                        Show help message
+```
 
-# Worker gRPC server port (controller connects back)
-grpc.server.port=9091
-
-# Worker capacity (max concurrent tasks)
-vajraedge.worker.max-capacity=10000
-
-# Heartbeat interval (seconds)
-vajraedge.worker.heartbeat-interval=5
-
-# Supported task types
-vajraedge.worker.task-types=HTTP,CUSTOM,SLEEP
+**Example:**
+```bash
+java -jar vajraedge-worker.jar \
+  --worker-id=worker-001 \
+  --controller-address=controller.example.com:9090 \
+  --max-concurrency=50000 \
+  --grpc-port=9091 \
+  --log-level=INFO
 ```
 
 ## Deployment
@@ -110,17 +111,22 @@ cd vajraedge-core
 **Terminal 2 - Start Worker 1:**
 ```bash
 cd vajraedge-worker
-VAJRAEDGE_WORKER_ID=worker-001 \
-GRPC_SERVER_PORT=9091 \
-./gradlew bootRun
+./gradlew build
+java -jar build/libs/vajraedge-worker-1.0.0.jar \
+  --worker-id=worker-001 \
+  --controller-address=localhost:9090 \
+  --max-concurrency=10000 \
+  --grpc-port=9091
 ```
 
 **Terminal 3 - Start Worker 2:**
 ```bash
 cd vajraedge-worker
-VAJRAEDGE_WORKER_ID=worker-002 \
-GRPC_SERVER_PORT=9092 \
-./gradlew bootRun
+java -jar build/libs/vajraedge-worker-1.0.0.jar \
+  --worker-id=worker-002 \
+  --controller-address=localhost:9090 \
+  --max-concurrency=10000 \
+  --grpc-port=9092
 ```
 
 ### Option 2: Docker Deployment
