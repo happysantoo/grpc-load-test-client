@@ -30,11 +30,16 @@ public class WorkerConfig implements Runnable {
             defaultValue = "${WORKER_ID}")
     private String workerId;
     
-    @Option(names = {"-c", "--controller"}, 
+    @Option(names = {"-c", "--controller-address"}, 
             description = "Controller address (host:port)",
             required = true,
-            defaultValue = "${CONTROLLER_ADDRESS:-localhost:8080}")
+            defaultValue = "${CONTROLLER_ADDRESS:-localhost:9090}")
     private String controllerAddress;
+    
+    @Option(names = {"-p", "--grpc-port"}, 
+            description = "Worker gRPC server port (default: ${DEFAULT-VALUE})",
+            defaultValue = "9091")
+    private int grpcPort;
     
     @Option(names = {"-m", "--max-concurrency"}, 
             description = "Maximum concurrent tasks (default: ${DEFAULT-VALUE})",
@@ -88,6 +93,7 @@ public class WorkerConfig implements Runnable {
         System.out.println("Worker Configuration:");
         System.out.println("  Worker ID: " + workerId);
         System.out.println("  Controller: " + controllerAddress);
+        System.out.println("  gRPC Port: " + grpcPort);
         System.out.println("  Max Concurrency: " + maxConcurrency);
         System.out.println("  Region: " + region);
         System.out.println("  Tags: " + tags);
@@ -100,6 +106,10 @@ public class WorkerConfig implements Runnable {
     
     public String getControllerAddress() {
         return controllerAddress;
+    }
+    
+    public int getGrpcPort() {
+        return grpcPort;
     }
     
     public int getMaxConcurrency() {
@@ -146,6 +156,11 @@ public class WorkerConfig implements Runnable {
         
         public Builder controllerAddress(String controllerAddress) {
             config.controllerAddress = controllerAddress;
+            return this;
+        }
+        
+        public Builder grpcPort(int grpcPort) {
+            config.grpcPort = grpcPort;
             return this;
         }
         
