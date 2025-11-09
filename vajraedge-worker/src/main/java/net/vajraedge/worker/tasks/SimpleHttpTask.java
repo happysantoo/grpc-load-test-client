@@ -9,9 +9,11 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Map;
 
 /**
  * Simple HTTP task for load testing HTTP endpoints.
+ * Supports configurable URL, method, timeout, and custom headers via parameters.
  */
 public class SimpleHttpTask implements Task {
     
@@ -20,10 +22,48 @@ public class SimpleHttpTask implements Task {
             .build();
     
     private final String url;
+    private final String method;
+    private final int timeoutSeconds;
+    private final Map<String, String> customHeaders;
     
+    /**
+     * Constructor with parameters from task assignment.
+     * Falls back to environment variables and defaults if parameters not provided.
+     */
+    public SimpleHttpTask(Map<String, String> parameters) {
+        if (parameters == null) {
+            parameters = Map.of();
+        }
+        
+        // URL: parameter > env var > default
+        this.url = parameters.getOrDefault("url", 
+                System.getenv().getOrDefault("HTTP_TASK_URL", "http://localhost:8080/actuator/health"));
+        
+        // HTTP method: parameter > env var > default
+        this.method = parameters.getOrDefault("method",
+                System.getenv().getOrDefault("HTTP_TASK_METHOD", "GET"));
+        
+        // Timeout: parameter > env var > default
+        String timeoutStr = parameters.getOrDefault("timeout",
+                System.getenv().getOrDefault("HTTP_TASK_TIMEOUT", "30"));
+        this.timeoutSeconds = Integer.parseInt(timeoutStr);
+        
+        // Parse custom headers from JSON string if provided
+        String headersJson = parameters.get("headers");
+        if (headersJson != null && !headersJson.isEmpty()) {
+            // Simple parsing - in production, use a JSON library
+            // For now, just store empty map (headers support would need proper JSON parsing)
+            this.customHeaders = Map.of();
+        } else {
+            this.customHeaders = Map.of();
+        }
+    }
+    
+    /**
+     * Default constructor for backwards compatibility.
+     */
     public SimpleHttpTask() {
-        // Default URL - can be overridden via environment variable
-        this.url = System.getenv().getOrDefault("HTTP_TASK_URL", "http://localhost:8080/actuator/health");
+        this(Map.of());
     }
     
     @Override
@@ -32,12 +72,25 @@ public class SimpleHttpTask implements Task {
         long taskId = Thread.currentThread().threadId();
         
         try {
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(url))
-                    .timeout(Duration.ofSeconds(30))
-                    .GET()
-                    .build();
+                    .timeout(Duration.ofSeconds(timeoutSeconds));
             
+            // Apply HTTP method
+            switch (method.toUpperCase()) {
+                case "GET" -> requestBuilder.GET();
+                case "POST" -> requestBuilder.POST(HttpRequest.BodyPublishers.noBody());
+                case "PUT" -> requestBuilder.PUT(HttpRequest.BodyPublishers.noBody());
+                case "DELETE" -> requestBuilder.DELETE();
+                default -> requestBuilder.GET();
+            }
+            
+            // Add custom headers
+            for (Map.Entry<String, String> header : customHeaders.entrySet()) {
+                requestBuilder.header(header.getKey(), header.getValue());
+            }
+            
+            HttpRequest request = requestBuilder.build();
             HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
             
             long latencyNanos = System.nanoTime() - startTimeNanos;

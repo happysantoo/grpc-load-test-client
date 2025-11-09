@@ -28,6 +28,18 @@ $(document).ready(function() {
  * Setup form handlers for distributed testing
  */
 function setupDistributedFormHandlers() {
+    // Task type change handler - show/hide parameter sections
+    $('#distTaskType').on('change', function() {
+        const taskType = $(this).val();
+        if (taskType === 'HTTP') {
+            $('#httpParams').removeClass('d-none');
+            $('#sleepParams').addClass('d-none');
+        } else if (taskType === 'SLEEP') {
+            $('#httpParams').addClass('d-none');
+            $('#sleepParams').removeClass('d-none');
+        }
+    });
+    
     // Start distributed test
     $('#distributedTestForm').on('submit', function(e) {
         e.preventDefault();
@@ -49,13 +61,38 @@ function setupDistributedFormHandlers() {
  * Start a distributed test
  */
 function startDistributedTest() {
+    const taskType = $('#distTaskType').val();
+    
+    // Collect task-specific parameters
+    const taskParameters = {};
+    if (taskType === 'HTTP') {
+        taskParameters.url = $('#httpUrl').val();
+        taskParameters.method = $('#httpMethod').val();
+        taskParameters.timeout = $('#httpTimeout').val();
+        
+        // Add custom headers if provided
+        const headers = $('#httpHeaders').val().trim();
+        if (headers) {
+            try {
+                JSON.parse(headers); // Validate JSON
+                taskParameters.headers = headers;
+            } catch (e) {
+                showNotification('danger', 'Invalid JSON in custom headers');
+                return;
+            }
+        }
+    } else if (taskType === 'SLEEP') {
+        taskParameters.duration = $('#sleepDuration').val();
+    }
+    
     const request = {
-        taskType: $('#distTaskType').val(),
+        taskType: taskType,
         targetTps: parseInt($('#targetTps').val()),
         durationSeconds: parseInt($('#distDuration').val()),
         rampUpSeconds: parseInt($('#distRampUp').val()),
         maxConcurrency: parseInt($('#distMaxConcurrency').val()),
-        minWorkers: parseInt($('#minWorkers').val())
+        minWorkers: parseInt($('#minWorkers').val()),
+        taskParameters: taskParameters
     };
     
     // Show spinner

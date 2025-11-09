@@ -4,17 +4,36 @@ import net.vajraedge.sdk.SimpleTaskResult;
 import net.vajraedge.sdk.Task;
 import net.vajraedge.sdk.TaskResult;
 
+import java.util.Map;
+
 /**
  * Simple sleep task for testing framework behavior without external dependencies.
+ * Supports configurable sleep duration via parameters.
  */
 public class SleepTask implements Task {
     
     private final long sleepMillis;
     
+    /**
+     * Constructor with parameters from task assignment.
+     * Falls back to environment variable and default if parameter not provided.
+     */
+    public SleepTask(Map<String, String> parameters) {
+        if (parameters == null) {
+            parameters = Map.of();
+        }
+        
+        // Duration: parameter > env var > default
+        String durationStr = parameters.getOrDefault("duration",
+                System.getenv().getOrDefault("SLEEP_TASK_DURATION_MS", "100"));
+        this.sleepMillis = Long.parseLong(durationStr);
+    }
+    
+    /**
+     * Default constructor for backwards compatibility.
+     */
     public SleepTask() {
-        // Default sleep duration - can be overridden via environment variable
-        String sleepDuration = System.getenv().getOrDefault("SLEEP_TASK_DURATION_MS", "100");
-        this.sleepMillis = Long.parseLong(sleepDuration);
+        this(Map.of());
     }
     
     @Override

@@ -125,23 +125,34 @@ public class TaskAssignmentHandler {
     
     /**
      * Create an instance of the task class with parameters.
-     * Note: Parameters are currently ignored as Task interface doesn't have initialize method.
-     * TODO: Consider adding TaskConfig interface for tasks that need parameters.
+     * Tries to use a constructor that accepts Map<String, String> for parameters.
+     * Falls back to no-arg constructor if parameter constructor not available.
      */
     private Task createTaskInstance(Class<? extends Task> taskClass, Map<String, String> parameters) 
             throws Exception {
+        // Try constructor with Map<String, String> parameter
+        try {
+            Constructor<? extends Task> constructor = taskClass.getDeclaredConstructor(Map.class);
+            return constructor.newInstance(parameters);
+        } catch (NoSuchMethodException e) {
+            // Fall back to no-arg constructor
+            log.debug("No Map constructor found for {}, using no-arg constructor", taskClass.getSimpleName());
+        }
+        
         // Try no-arg constructor
         try {
             Constructor<? extends Task> constructor = taskClass.getDeclaredConstructor();
             Task task = constructor.newInstance();
             
-            // TODO: If task implements TaskConfig interface, pass parameters
-            // For now, tasks should use environment variables or config files for parameters
+            if (parameters != null && !parameters.isEmpty()) {
+                log.warn("Task {} does not support parameters but {} parameters were provided", 
+                        taskClass.getSimpleName(), parameters.size());
+            }
             
             return task;
         } catch (NoSuchMethodException e) {
-            throw new IllegalStateException("Task class must have a no-arg constructor: " + 
-                                          taskClass.getName());
+            throw new IllegalStateException("Task class must have either a Map<String, String> constructor " +
+                                          "or a no-arg constructor: " + taskClass.getName());
         }
     }
     
