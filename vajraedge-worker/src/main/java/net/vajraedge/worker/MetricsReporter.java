@@ -113,6 +113,12 @@ public class MetricsReporter {
             // Get current stats from executor
             TaskExecutorService.ExecutorStats stats = taskExecutor.getStats();
             
+            // Skip reporting if no tasks have been executed yet
+            if (stats.completedTasks() == 0 && stats.activeTasks() == 0) {
+                log.trace("No tasks executed yet, skipping metrics report");
+                return;
+            }
+            
             // Create metrics snapshot
             LocalWorkerMetrics metrics = new LocalWorkerMetrics(
                 stats.completedTasks(),

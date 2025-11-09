@@ -279,7 +279,7 @@ public class GrpcClient {
             
             @Override
             public void onError(Throwable t) {
-                log.error("Error in metrics stream", t);
+                log.debug("Metrics stream error (expected when no active test): {}", t.getMessage());
                 metricsStream = null;
             }
             
