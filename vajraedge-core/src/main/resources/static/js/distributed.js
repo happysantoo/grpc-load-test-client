@@ -11,10 +11,11 @@ let metricsRefreshInterval = null;
 $(document).ready(function() {
     setupDistributedFormHandlers();
     loadWorkers();
-    loadActiveDistributedTests(); // Load active tests on startup
+    // DON'T load tests on startup - let tab switching handle it
     
-    // Refresh workers every 5 seconds when on distributed tab
+    // Refresh workers and tests when distributed tab is shown
     $('#distributed-tab').on('shown.bs.tab', function() {
+        console.log('Distributed tab shown - loading workers and tests');
         loadWorkers();
         loadActiveDistributedTests();
         workerRefreshInterval = setInterval(loadWorkers, 5000);
@@ -22,6 +23,7 @@ $(document).ready(function() {
     });
     
     $('#distributed-tab').on('hidden.bs.tab', function() {
+        console.log('Distributed tab hidden - stopping intervals');
         if (workerRefreshInterval) {
             clearInterval(workerRefreshInterval);
             workerRefreshInterval = null;
@@ -194,23 +196,30 @@ function monitorDistributedTest(testId) {
  * Update distributed metrics display
  */
 function updateDistributedMetrics(data) {
+    console.log('updateDistributedMetrics called with data:', data);
     const metrics = data.metrics;
     const testInfo = data.testInfo;
     
-    if (!metrics) return;
+    if (!metrics) {
+        console.warn('No metrics data available');
+        return;
+    }
     
+    console.log('Updating metrics panel...');
     // Show metrics panel, hide "no test" message
     $('#noTestMessage').addClass('d-none');
     $('#metricsPanel').removeClass('d-none');
     
     // Update current test ID
     $('#currentTestId').text(testInfo.testId.substring(0, 12) + '...');
+    console.log('Updated test ID in header');
     
     // Update summary metrics
     $('#totalRequests').text(metrics.totalRequests?.toLocaleString() || '0');
     $('#successfulRequests').text(metrics.successfulRequests?.toLocaleString() || '0');
     $('#failedRequests').text(metrics.failedRequests?.toLocaleString() || '0');
     $('#currentTps').text(metrics.currentTps?.toFixed(2) || '0.00');
+    console.log('Updated request counts - total:', metrics.totalRequests);
     
     // Update success rate
     if (metrics.totalRequests > 0) {
@@ -222,10 +231,10 @@ function updateDistributedMetrics(data) {
     
     // Update percentiles if available
     if (metrics.latency) {
-        $('#p50').text(metrics.latency.p50 || '-');
-        $('#p95').text(metrics.latency.p95 || '-');
-        $('#p99').text(metrics.latency.p99 || '-');
-        $('#avgLatency').text((metrics.latency.p50 || 0) + 'ms');
+        $('#p50').text(metrics.latency.p50Ms || '-');
+        $('#p95').text(metrics.latency.p95Ms || '-');
+        $('#p99').text(metrics.latency.p99Ms || '-');
+        $('#avgLatency').text((metrics.latency.avgMs || 0) + 'ms');
     }
     
     // Update test status
@@ -245,6 +254,7 @@ function updateDistributedMetrics(data) {
         $('#startDistBtn').prop('disabled', false);
         $('#stopDistBtn').prop('disabled', true);
     }
+    console.log('Metrics panel update complete');
 }
 
 /**
@@ -278,22 +288,24 @@ function loadActiveDistributedTests() {
             console.error('Failed to load active distributed tests:', xhr);
         }
     });
-}
-
 /**
  * Display active distributed tests in the Active Tests panel
  */
 function displayActiveTests(activeTests, count) {
+    console.log('displayActiveTests called:', count, 'tests');
     const listContainer = $('#activeTestsList');
     
     if (count === 0) {
-        listContainer.html('<p class="text-muted">No active tests</p>');
+        console.log('No active distributed tests');
+        listContainer.html('<p class="text-muted">No active distributed tests</p>');
         return;
     }
     
+    console.log('Clearing and populating active tests list');
     listContainer.empty();
     
     Object.entries(activeTests).forEach(([testId, testInfo]) => {
+        console.log('Adding test to list:', testId, testInfo);
         const item = $(`
             <div class="list-group-item list-group-item-action" data-test-id="${testId}">
                 <div class="d-flex w-100 justify-content-between">
@@ -305,6 +317,7 @@ function displayActiveTests(activeTests, count) {
         `);
         
         item.on('click', function() {
+            console.log('Test clicked:', testId);
             // Highlight selected test
             $('.list-group-item').removeClass('active');
             $(this).addClass('active');
@@ -316,6 +329,8 @@ function displayActiveTests(activeTests, count) {
         
         listContainer.append(item);
     });
+    
+    // Auto-select the first test if none is selected
     
     // Auto-select the first test if none is selected
     if (!currentDistributedTestId && count > 0) {
