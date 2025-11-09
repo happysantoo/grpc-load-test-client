@@ -160,6 +160,16 @@ public class WorkerManager {
     }
     
     /**
+     * Get worker by ID.
+     *
+     * @param workerId Worker identifier
+     * @return Worker info or null if not found
+     */
+    public WorkerInfo getWorkerById(String workerId) {
+        return workers.get(workerId);
+    }
+    
+    /**
      * Get total number of registered workers.
      *
      * @return Worker count
