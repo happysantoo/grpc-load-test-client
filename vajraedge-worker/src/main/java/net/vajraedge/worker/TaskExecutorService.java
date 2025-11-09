@@ -141,10 +141,18 @@ public class TaskExecutorService {
      * @return Executor statistics
      */
     public ExecutorStats getStats() {
+        long completed = completedTasks.get();
+        long failed = failedTasks.get();
+        int active = maxConcurrency - concurrencyLimit.availablePermits();
+        
+        // Calculate current TPS based on recent completions
+        double currentTps = 0.0; // TODO: Implement proper TPS calculation
+        
         return new ExecutorStats(
-            completedTasks.get(),
-            failedTasks.get(),
-            maxConcurrency - concurrencyLimit.availablePermits(),
+            completed,
+            failed,
+            active,
+            currentTps,
             accepting.get()
         );
     }
@@ -203,6 +211,7 @@ public class TaskExecutorService {
         long completedTasks,
         long failedTasks,
         int activeTasks,
+        double currentTps,
         boolean accepting
     ) {}
 }

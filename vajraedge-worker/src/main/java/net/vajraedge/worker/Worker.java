@@ -40,6 +40,7 @@ public class Worker {
     private final TaskExecutorService taskExecutor;
     private final MetricsReporter metricsReporter;
     private final CountDownLatch shutdownLatch;
+    private final String testId; // TODO: Make this configurable
     
     private volatile boolean running;
     
@@ -50,9 +51,10 @@ public class Worker {
      */
     public Worker(WorkerConfig config) {
         this.config = config;
+        this.testId = "default-test"; // TODO: Get from task assignment
         this.grpcClient = new GrpcClient(config.getControllerAddress());
         this.taskExecutor = new TaskExecutorService(config.getMaxConcurrency());
-        this.metricsReporter = new MetricsReporter(config.getWorkerId(), grpcClient, taskExecutor);
+        this.metricsReporter = new MetricsReporter(config.getWorkerId(), testId, grpcClient, taskExecutor);
         this.shutdownLatch = new CountDownLatch(1);
         this.running = false;
     }

@@ -1,7 +1,7 @@
 package net.vajraedge.worker;
 
 /**
- * Snapshot of worker metrics at a point in time.
+ * Snapshot of local worker metrics at a point in time.
  * 
  * @param completedTasks Total completed tasks
  * @param successfulTasks Successfully completed tasks
@@ -15,7 +15,7 @@ package net.vajraedge.worker;
  * 
  * @since 2.0.0
  */
-public record WorkerMetrics(
+public record LocalWorkerMetrics(
     long completedTasks,
     long successfulTasks,
     long failedTasks,

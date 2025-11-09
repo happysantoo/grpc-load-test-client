@@ -26,6 +26,7 @@ public class MetricsReporter {
     private static final Logger log = LoggerFactory.getLogger(MetricsReporter.class);
     
     private final String workerId;
+    private final String testId;
     private final GrpcClient grpcClient;
     private final TaskExecutorService taskExecutor;
     private final ScheduledExecutorService scheduler;
@@ -37,11 +38,13 @@ public class MetricsReporter {
      * Create a new metrics reporter.
      *
      * @param workerId Unique worker identifier
+     * @param testId Test identifier
      * @param grpcClient gRPC client for sending metrics
      * @param taskExecutor Task executor to collect metrics from
      */
-    public MetricsReporter(String workerId, GrpcClient grpcClient, TaskExecutorService taskExecutor) {
+    public MetricsReporter(String workerId, String testId, GrpcClient grpcClient, TaskExecutorService taskExecutor) {
         this.workerId = workerId;
+        this.testId = testId;
         this.grpcClient = grpcClient;
         this.taskExecutor = taskExecutor;
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -111,15 +114,20 @@ public class MetricsReporter {
             TaskExecutorService.ExecutorStats stats = taskExecutor.getStats();
             
             // Create metrics snapshot
-            WorkerMetrics metrics = new WorkerMetrics(
+            LocalWorkerMetrics metrics = new LocalWorkerMetrics(
                 stats.completedTasks(),
+                stats.completedTasks() - stats.failedTasks(),
                 stats.failedTasks(),
                 stats.activeTasks(),
+                stats.currentTps(),
+                0.0, // p50 - TODO: implement
+                0.0, // p95 - TODO: implement
+                0.0, // p99 - TODO: implement
                 System.currentTimeMillis()
             );
             
             // Send to controller
-            grpcClient.sendMetrics(workerId, metrics);
+            grpcClient.sendMetrics(workerId, testId, metrics);
             
             log.debug("Metrics reported: workerId={}, completed={}, failed={}, active={}", 
                 workerId,
