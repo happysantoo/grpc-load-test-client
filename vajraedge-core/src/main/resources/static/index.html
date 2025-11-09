@@ -28,7 +28,20 @@
                         <h5 class="mb-0">Test Configuration</h5>
                     </div>
                     <div class="card-body">
-                        <form id="testConfigForm">
+                        <!-- Mode Tabs -->
+                        <ul class="nav nav-tabs mb-3" id="modeTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="single-node-tab" data-bs-toggle="tab" data-bs-target="#single-node" type="button" role="tab">Single Node</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="distributed-tab" data-bs-toggle="tab" data-bs-target="#distributed" type="button" role="tab">Distributed</button>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content" id="modeTabContent">
+                            <!-- Single Node Mode -->
+                            <div class="tab-pane fade show active" id="single-node" role="tabpanel">
+                                <form id="testConfigForm">
                             <!-- Mode Selection -->
                             <div class="mb-3">
                                 <label for="testMode" class="form-label">Test Mode</label>
@@ -132,6 +145,70 @@
                                 <button type="button" class="btn btn-danger" id="stopBtn" disabled>Stop Test</button>
                             </div>
                         </form>
+                            </div>
+                            
+                            <!-- Distributed Mode -->
+                            <div class="tab-pane fade" id="distributed" role="tabpanel">
+                                <form id="distributedTestForm">
+                                    <div class="mb-3">
+                                        <label for="distTaskType" class="form-label">Task Type</label>
+                                        <input type="text" class="form-control" id="distTaskType" value="HTTP" required>
+                                        <div class="form-text">Task type identifier (must be registered in workers)</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="targetTps" class="form-label">Target TPS</label>
+                                        <input type="number" class="form-control" id="targetTps" value="1000" min="1" required>
+                                        <div class="form-text">Total transactions per second across all workers</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="distDuration" class="form-label">Duration (seconds)</label>
+                                        <input type="number" class="form-control" id="distDuration" value="60" min="1" required>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="distRampUp" class="form-label">Ramp-Up (seconds)</label>
+                                        <input type="number" class="form-control" id="distRampUp" value="10" min="0">
+                                        <div class="form-text">Time to gradually reach target TPS</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="distMaxConcurrency" class="form-label">Max Concurrency per Worker</label>
+                                        <input type="number" class="form-control" id="distMaxConcurrency" value="10000" min="1">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="minWorkers" class="form-label">Minimum Workers Required</label>
+                                        <input type="number" class="form-control" id="minWorkers" value="1" min="1">
+                                        <div class="form-text">Test will fail if fewer workers are available</div>
+                                    </div>
+                                    
+                                    <div class="d-grid gap-2">
+                                        <button type="submit" class="btn btn-success" id="startDistBtn">
+                                            <span class="spinner-border spinner-border-sm d-none" id="startDistSpinner"></span>
+                                            Start Distributed Test
+                                        </button>
+                                        <button type="button" class="btn btn-danger" id="stopDistBtn" disabled>Stop Distributed Test</button>
+                                        <button type="button" class="btn btn-info" id="refreshWorkersBtn">
+                                            🔄 Refresh Workers
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Worker Status Panel -->
+                <div class="card mt-3" id="workerPanel">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">👷 Worker Nodes</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="workerList">
+                            <p class="text-muted">Loading workers...</p>
+                        </div>
                     </div>
                 </div>
 
@@ -390,6 +467,11 @@
         </div>
     </div>
 
+    <!-- Toast Container for Notifications -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <!-- Toasts will be dynamically added here -->
+    </div>
+
     <!--jQuery, Bootstrap, Chart.js, SockJS, STOMP -->
     <script src="/webjars/jquery/3.7.1/jquery.min.js"></script>
     <script src="/webjars/bootstrap/5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -401,5 +483,6 @@
     <script src="/js/websocket.js"></script>
     <script src="/js/charts.js"></script>
     <script src="/js/dashboard.js"></script>
+    <script src="/js/distributed.js"></script>
 </body>
 </html>
