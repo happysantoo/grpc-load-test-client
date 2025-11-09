@@ -4,22 +4,35 @@
 
 let currentDistributedTestId = null;
 let workerRefreshInterval = null;
+let activeTestsRefreshInterval = null;
+let metricsRefreshInterval = null;
 
 // Initialize distributed testing on page load
 $(document).ready(function() {
     setupDistributedFormHandlers();
     loadWorkers();
+    loadActiveDistributedTests(); // Load active tests on startup
     
     // Refresh workers every 5 seconds when on distributed tab
     $('#distributed-tab').on('shown.bs.tab', function() {
         loadWorkers();
+        loadActiveDistributedTests();
         workerRefreshInterval = setInterval(loadWorkers, 5000);
+        activeTestsRefreshInterval = setInterval(loadActiveDistributedTests, 2000);
     });
     
     $('#distributed-tab').on('hidden.bs.tab', function() {
         if (workerRefreshInterval) {
             clearInterval(workerRefreshInterval);
             workerRefreshInterval = null;
+        }
+        if (activeTestsRefreshInterval) {
+            clearInterval(activeTestsRefreshInterval);
+            activeTestsRefreshInterval = null;
+        }
+        if (metricsRefreshInterval) {
+            clearInterval(metricsRefreshInterval);
+            metricsRefreshInterval = null;
         }
     });
 });
@@ -157,7 +170,13 @@ function stopDistributedTest() {
  * Monitor distributed test status
  */
 function monitorDistributedTest(testId) {
-    const interval = setInterval(function() {
+    // Stop any existing monitoring
+    if (metricsRefreshInterval) {
+        clearInterval(metricsRefreshInterval);
+    }
+    
+    // Start polling for metrics
+    metricsRefreshInterval = setInterval(function() {
         $.ajax({
             url: `/api/tests/distributed/${testId}`,
             method: 'GET',
@@ -165,18 +184,10 @@ function monitorDistributedTest(testId) {
                 updateDistributedMetrics(response);
             },
             error: function() {
-                clearInterval(interval);
+                console.log('Failed to fetch metrics for test:', testId);
             }
         });
     }, 1000);
-    
-    // Stop monitoring after test duration + 10 seconds
-    const duration = parseInt($('#distDuration').val());
-    setTimeout(function() {
-        clearInterval(interval);
-        $('#startDistBtn').prop('disabled', false);
-        $('#stopDistBtn').prop('disabled', true);
-    }, (duration + 10) * 1000);
 }
 
 /**
@@ -186,25 +197,53 @@ function updateDistributedMetrics(data) {
     const metrics = data.metrics;
     const testInfo = data.testInfo;
     
-    if (metrics) {
-        // Update metrics cards
-        $('#totalRequests').text(metrics.totalRequests?.toLocaleString() || '0');
-        $('#successfulRequests').text(metrics.successfulRequests?.toLocaleString() || '0');
-        $('#failedRequests').text(metrics.failedRequests?.toLocaleString() || '0');
-        $('#currentTps').text(metrics.currentTps?.toFixed(2) || '0.00');
-        
-        // Update percentiles
-        if (metrics.latency) {
-            $('#p50').text(metrics.latency.p50 || '-');
-            $('#p95').text(metrics.latency.p95 || '-');
-            $('#p99').text(metrics.latency.p99 || '-');
+    if (!metrics) return;
+    
+    // Show metrics panel, hide "no test" message
+    $('#noTestMessage').addClass('d-none');
+    $('#metricsPanel').removeClass('d-none');
+    
+    // Update current test ID
+    $('#currentTestId').text(testInfo.testId.substring(0, 12) + '...');
+    
+    // Update summary metrics
+    $('#totalRequests').text(metrics.totalRequests?.toLocaleString() || '0');
+    $('#successfulRequests').text(metrics.successfulRequests?.toLocaleString() || '0');
+    $('#failedRequests').text(metrics.failedRequests?.toLocaleString() || '0');
+    $('#currentTps').text(metrics.currentTps?.toFixed(2) || '0.00');
+    
+    // Update success rate
+    if (metrics.totalRequests > 0) {
+        const successRate = (metrics.successfulRequests / metrics.totalRequests * 100).toFixed(2);
+        $('#successRate').text(successRate + '%');
+    } else {
+        $('#successRate').text('0%');
+    }
+    
+    // Update percentiles if available
+    if (metrics.latency) {
+        $('#p50').text(metrics.latency.p50 || '-');
+        $('#p95').text(metrics.latency.p95 || '-');
+        $('#p99').text(metrics.latency.p99 || '-');
+        $('#avgLatency').text((metrics.latency.p50 || 0) + 'ms');
+    }
+    
+    // Update test status
+    const now = Date.now();
+    const elapsed = Math.floor((now - testInfo.startedAt) / 1000);
+    $('#elapsedTime').text(elapsed + 's');
+    
+    if (elapsed < testInfo.durationSeconds) {
+        $('#testStatus').text('RUNNING').removeClass('text-success').addClass('text-warning');
+    } else {
+        $('#testStatus').text('COMPLETED').removeClass('text-warning').addClass('text-success');
+        // Stop monitoring when test completes
+        if (metricsRefreshInterval) {
+            clearInterval(metricsRefreshInterval);
+            metricsRefreshInterval = null;
         }
-        
-        // Update success rate
-        if (metrics.totalRequests > 0) {
-            const successRate = (metrics.successfulRequests / metrics.totalRequests * 100).toFixed(2);
-            $('#successRate').text(successRate + '%');
-        }
+        $('#startDistBtn').prop('disabled', false);
+        $('#stopDistBtn').prop('disabled', true);
     }
 }
 
@@ -223,6 +262,68 @@ function loadWorkers() {
             $('#workerList').html('<p class="text-danger">Failed to load workers</p>');
         }
     });
+}
+
+/**
+ * Load active distributed tests
+ */
+function loadActiveDistributedTests() {
+    $.ajax({
+        url: '/api/tests/distributed',
+        method: 'GET',
+        success: function(response) {
+            displayActiveTests(response.activeTests, response.count);
+        },
+        error: function(xhr) {
+            console.error('Failed to load active distributed tests:', xhr);
+        }
+    });
+}
+
+/**
+ * Display active distributed tests in the Active Tests panel
+ */
+function displayActiveTests(activeTests, count) {
+    const listContainer = $('#activeTestsList');
+    
+    if (count === 0) {
+        listContainer.html('<p class="text-muted">No active tests</p>');
+        return;
+    }
+    
+    listContainer.empty();
+    
+    Object.entries(activeTests).forEach(([testId, testInfo]) => {
+        const item = $(`
+            <div class="list-group-item list-group-item-action" data-test-id="${testId}">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">${testId.substring(0, 12)}...</h6>
+                    <small class="status-running">●</small>
+                </div>
+                <small class="text-muted">${testInfo.taskType} - ${testInfo.targetTps} TPS - ${testInfo.workerCount} workers</small>
+            </div>
+        `);
+        
+        item.on('click', function() {
+            // Highlight selected test
+            $('.list-group-item').removeClass('active');
+            $(this).addClass('active');
+            
+            // Set current test and start monitoring
+            currentDistributedTestId = testId;
+            monitorDistributedTest(testId);
+        });
+        
+        listContainer.append(item);
+    });
+    
+    // Auto-select the first test if none is selected
+    if (!currentDistributedTestId && count > 0) {
+        const firstTestId = Object.keys(activeTests)[0];
+        currentDistributedTestId = firstTestId;
+        listContainer.find('.list-group-item').first().addClass('active');
+        monitorDistributedTest(firstTestId);
+    }
 }
 
 /**

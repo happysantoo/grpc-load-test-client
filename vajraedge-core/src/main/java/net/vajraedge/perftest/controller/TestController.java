@@ -224,6 +224,25 @@ public class TestController {
     // ============================================================================
     
     /**
+     * Get all active distributed tests.
+     * 
+     * GET /api/tests/distributed
+     */
+    @GetMapping("/distributed")
+    public ResponseEntity<?> getActiveDistributedTests() {
+        logger.info("Fetching all active distributed tests");
+        
+        Map<String, DistributedTestService.DistributedTestInfo> activeTests = 
+            distributedTestService.getActiveTests();
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("activeTests", activeTests);
+        response.put("count", activeTests.size());
+        
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
      * Start a distributed performance test across multiple workers.
      * 
      * POST /api/tests/distributed
