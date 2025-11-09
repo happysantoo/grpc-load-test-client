@@ -11,7 +11,7 @@ import net.vajraedge.sdk.Task;
 import net.vajraedge.sdk.TaskFactory;
 import net.vajraedge.perftest.dto.TestConfigRequest;
 import net.vajraedge.perftest.dto.TestStatusResponse;
-import net.vajraedge.perftest.metrics.MetricsCollector;
+import net.vajraedge.sdk.metrics.MetricsCollector;
 import net.vajraedge.perftest.runner.ConcurrencyBasedTestRunner;
 import net.vajraedge.perftest.runner.PerformanceTestRunner;
 import net.vajraedge.perftest.runner.TestResult;
@@ -204,7 +204,7 @@ public class TestExecutionService {
      * @param testId test identifier
      * @return MetricsSnapshot or null if test not found
      */
-    public net.vajraedge.perftest.metrics.MetricsSnapshot getTestMetrics(String testId) {
+    public net.vajraedge.sdk.metrics.MetricsSnapshot getTestMetrics(String testId) {
         TestExecution execution = activeTests.get(testId);
         if (execution == null) {
             return null;

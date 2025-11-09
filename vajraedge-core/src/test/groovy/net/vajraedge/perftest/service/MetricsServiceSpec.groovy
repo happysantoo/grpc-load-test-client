@@ -1,7 +1,7 @@
 package net.vajraedge.perftest.service
 
-import net.vajraedge.perftest.metrics.MetricsSnapshot
-import net.vajraedge.perftest.metrics.PercentileStats
+import net.vajraedge.sdk.metrics.MetricsSnapshot
+import net.vajraedge.sdk.metrics.PercentileStats
 import spock.lang.Specification
 import spock.lang.Unroll
 

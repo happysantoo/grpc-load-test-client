@@ -1,5 +1,7 @@
 package net.vajraedge.worker;
 
+import net.vajraedge.sdk.metrics.MetricsSnapshot;
+import net.vajraedge.sdk.metrics.PercentileStats;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -110,36 +112,40 @@ public class MetricsReporter {
      */
     private void reportMetrics() {
         try {
-            // Get current stats from executor
-            TaskExecutorService.ExecutorStats stats = taskExecutor.getStats();
+            // Get metrics snapshot from executor
+            MetricsSnapshot snapshot = taskExecutor.getMetricsSnapshot();
             
             // Skip reporting if no tasks have been executed yet
-            if (stats.completedTasks() == 0 && stats.activeTasks() == 0) {
+            if (snapshot.getTotalTasks() == 0) {
                 log.trace("No tasks executed yet, skipping metrics report");
                 return;
             }
             
+            // Get percentile stats
+            PercentileStats percentiles = snapshot.getPercentiles();
+            
             // Create metrics snapshot
             LocalWorkerMetrics metrics = new LocalWorkerMetrics(
-                stats.completedTasks(),
-                stats.completedTasks() - stats.failedTasks(),
-                stats.failedTasks(),
-                stats.activeTasks(),
-                stats.currentTps(),
-                0.0, // p50 - TODO: implement
-                0.0, // p95 - TODO: implement
-                0.0, // p99 - TODO: implement
+                snapshot.getTotalTasks(),
+                snapshot.getSuccessfulTasks(),
+                snapshot.getFailedTasks(),
+                taskExecutor.getStats().activeTasks(),  // Get active from ExecutorStats
+                snapshot.getTps(),
+                percentiles.getPercentile(0.5),  // p50
+                percentiles.getPercentile(0.95), // p95
+                percentiles.getPercentile(0.99), // p99
                 System.currentTimeMillis()
             );
             
             // Send to controller
             grpcClient.sendMetrics(workerId, testId, metrics);
             
-            log.debug("Metrics reported: workerId={}, completed={}, failed={}, active={}", 
+            log.debug("Metrics reported: workerId={}, completed={}, failed={}, active={}, tps={}", 
                 workerId,
                 metrics.completedTasks(), 
                 metrics.failedTasks(), 
-                metrics.activeTasks());
+                metrics.activeTasks(),
+                metrics.currentTps());
             
         } catch (Exception e) {
             log.error("Failed to report metrics", e);

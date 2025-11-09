@@ -1,6 +1,6 @@
 package net.vajraedge.perftest.suite;
 
-import net.vajraedge.perftest.metrics.MetricsSnapshot;
+import net.vajraedge.sdk.metrics.MetricsSnapshot;
 
 import java.time.Instant;
 import java.util.HashMap;

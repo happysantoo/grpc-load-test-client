@@ -1,13 +1,15 @@
 package net.vajraedge.worker;
 
+import net.vajraedge.sdk.SimpleTaskResult;
 import net.vajraedge.sdk.Task;
 import net.vajraedge.sdk.TaskResult;
+import net.vajraedge.sdk.metrics.MetricsCollector;
+import net.vajraedge.sdk.metrics.MetricsSnapshot;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Service for executing tasks using virtual threads.
@@ -25,11 +27,7 @@ public class TaskExecutorService {
     private final ExecutorService executor;
     private final Semaphore concurrencyLimit;
     private final AtomicBoolean accepting;
-    private final AtomicLong completedTasks;
-    private final AtomicLong failedTasks;
-    
-    private final ConcurrentLinkedQueue<TaskResult> recentResults;
-    private static final int MAX_RECENT_RESULTS = 1000;
+    private final MetricsCollector metricsCollector;
     
     /**
      * Create a new task executor with the specified concurrency limit.
@@ -41,9 +39,7 @@ public class TaskExecutorService {
         this.executor = Executors.newVirtualThreadPerTaskExecutor();
         this.concurrencyLimit = new Semaphore(maxConcurrency);
         this.accepting = new AtomicBoolean(false);
-        this.completedTasks = new AtomicLong(0);
-        this.failedTasks = new AtomicLong(0);
-        this.recentResults = new ConcurrentLinkedQueue<>();
+        this.metricsCollector = new MetricsCollector();
     }
     
     /**
@@ -85,24 +81,27 @@ public class TaskExecutorService {
         CompletableFuture<TaskResult> future = new CompletableFuture<>();
         
         executor.submit(() -> {
+            long startNanos = System.nanoTime();
             try {
                 TaskResult result = task.execute();
                 
-                // Track result
-                if (result.isSuccess()) {
-                    completedTasks.incrementAndGet();
-                } else {
-                    failedTasks.incrementAndGet();
-                }
-                
-                // Store recent result
-                addRecentResult(result);
+                // Record result in metrics collector
+                metricsCollector.recordResult(result);
                 
                 future.complete(result);
                 
             } catch (Exception e) {
+                long latencyNanos = System.nanoTime() - startNanos;
                 log.error("Task execution failed", e);
-                failedTasks.incrementAndGet();
+                
+                // Record failure in metrics
+                TaskResult failedResult = SimpleTaskResult.failure(
+                    0L,  // taskId
+                    latencyNanos,
+                    e.getMessage()
+                );
+                metricsCollector.recordResult(failedResult);
+                
                 future.completeExceptionally(e);
             } finally {
                 concurrencyLimit.release();
@@ -142,46 +141,30 @@ public class TaskExecutorService {
     }
     
     /**
-     * Add result to recent results queue (bounded).
-     */
-    private void addRecentResult(TaskResult result) {
-        recentResults.offer(result);
-        
-        // Keep queue bounded
-        while (recentResults.size() > MAX_RECENT_RESULTS) {
-            recentResults.poll();
-        }
-    }
-    
-    /**
      * Get current executor statistics.
      *
      * @return Executor statistics
      */
     public ExecutorStats getStats() {
-        long completed = completedTasks.get();
-        long failed = failedTasks.get();
+        MetricsSnapshot snapshot = metricsCollector.getSnapshot();
         int active = maxConcurrency - concurrencyLimit.availablePermits();
         
-        // Calculate current TPS based on recent completions
-        double currentTps = 0.0; // TODO: Implement proper TPS calculation
-        
         return new ExecutorStats(
-            completed,
-            failed,
+            snapshot.getTotalTasks(),
+            snapshot.getFailedTasks(),
             active,
-            currentTps,
+            snapshot.getTps(),
             accepting.get()
         );
     }
     
     /**
-     * Get recent task results for metrics reporting.
+     * Get metrics snapshot for reporting.
      *
-     * @return List of recent results
+     * @return Metrics snapshot
      */
-    public ConcurrentLinkedQueue<TaskResult> getRecentResults() {
-        return recentResults;
+    public MetricsSnapshot getMetricsSnapshot() {
+        return metricsCollector.getSnapshot();
     }
     
     /**
