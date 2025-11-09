@@ -36,8 +36,10 @@ public class Worker {
     private static final Logger log = LoggerFactory.getLogger(Worker.class);
     
     private final WorkerConfig config;
+    private final TaskRegistry taskRegistry;
     private final GrpcClient grpcClient;
     private final TaskExecutorService taskExecutor;
+    private final TaskAssignmentHandler assignmentHandler;
     private final MetricsReporter metricsReporter;
     private final CountDownLatch shutdownLatch;
     private final String testId; // TODO: Make this configurable
@@ -52,11 +54,16 @@ public class Worker {
     public Worker(WorkerConfig config) {
         this.config = config;
         this.testId = "default-test"; // TODO: Get from task assignment
+        this.taskRegistry = new TaskRegistry();
         this.grpcClient = new GrpcClient(config.getControllerAddress());
         this.taskExecutor = new TaskExecutorService(config.getMaxConcurrency());
+        this.assignmentHandler = new TaskAssignmentHandler(taskRegistry, taskExecutor, grpcClient);
         this.metricsReporter = new MetricsReporter(config.getWorkerId(), testId, grpcClient, taskExecutor);
         this.shutdownLatch = new CountDownLatch(1);
         this.running = false;
+        
+        // Wire up assignment handler in gRPC client
+        grpcClient.setAssignmentHandler(assignmentHandler);
     }
     
     /**

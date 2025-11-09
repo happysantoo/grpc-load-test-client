@@ -33,6 +33,7 @@ public class GrpcClient {
     private volatile WorkerServiceGrpc.WorkerServiceBlockingStub blockingStub;
     private volatile WorkerServiceGrpc.WorkerServiceStub asyncStub;
     private volatile StreamObserver<net.vajraedge.perftest.proto.WorkerMetrics> metricsStream;
+    private volatile TaskAssignmentHandler assignmentHandler;
     private volatile boolean connected;
     
     /**
@@ -43,6 +44,16 @@ public class GrpcClient {
     public GrpcClient(String controllerAddress) {
         this.controllerAddress = controllerAddress;
         this.connected = false;
+    }
+    
+    /**
+     * Set the task assignment handler.
+     * Must be called before connecting to controller.
+     *
+     * @param handler Task assignment handler
+     */
+    public void setAssignmentHandler(TaskAssignmentHandler handler) {
+        this.assignmentHandler = handler;
     }
     
     /**

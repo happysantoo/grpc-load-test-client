@@ -109,6 +109,15 @@ public class WorkerInfo {
         return supportedTaskTypes.contains(taskType);
     }
     
+    // Alias for compatibility
+    public boolean supportsTask(String taskType) {
+        return supportsTaskType(taskType);
+    }
+    
+    public WorkerHealthStatus getStatus() {
+        return healthStatus;
+    }
+    
     public double getLoadPercentage() {
         return maxCapacity > 0 ? (double) currentLoad.get() / maxCapacity * 100.0 : 0.0;
     }

@@ -124,6 +124,24 @@ public class TaskExecutorService {
     }
     
     /**
+     * Submit a task for asynchronous execution (fire and forget).
+     *
+     * @param task Task to execute
+     */
+    public void submit(Task task) {
+        executeAsync(task);  // Fire and forget
+    }
+    
+    /**
+     * Check if executor can accept more tasks.
+     *
+     * @return true if under capacity
+     */
+    public boolean canAcceptMore() {
+        return accepting.get() && concurrencyLimit.availablePermits() > 0;
+    }
+    
+    /**
      * Add result to recent results queue (bounded).
      */
     private void addRecentResult(TaskResult result) {
