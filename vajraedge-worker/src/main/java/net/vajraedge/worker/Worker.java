@@ -65,9 +65,9 @@ public class Worker {
         
         this.grpcClient = new GrpcClient(config.getControllerAddress());
         this.taskExecutor = new TaskExecutorService(config.getMaxConcurrency());
-        this.assignmentHandler = new TaskAssignmentHandler(taskRegistry, taskExecutor, grpcClient);
-        this.grpcServer = new WorkerGrpcServer(config.getGrpcPort(), assignmentHandler);
         this.metricsReporter = new MetricsReporter(config.getWorkerId(), testId, grpcClient, taskExecutor);
+        this.assignmentHandler = new TaskAssignmentHandler(taskRegistry, taskExecutor, grpcClient, metricsReporter);
+        this.grpcServer = new WorkerGrpcServer(config.getGrpcPort(), assignmentHandler);
         this.heartbeatSender = new HeartbeatSender(config.getWorkerId(), grpcClient, taskExecutor);
         this.shutdownLatch = new CountDownLatch(1);
         this.running = false;

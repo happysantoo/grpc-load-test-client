@@ -26,7 +26,7 @@ public class MetricsReporter {
     private static final Logger log = LoggerFactory.getLogger(MetricsReporter.class);
     
     private final String workerId;
-    private final String testId;
+    private volatile String testId;  // Made mutable to support multiple tests
     private final GrpcClient grpcClient;
     private final TaskExecutorService taskExecutor;
     private final ScheduledExecutorService scheduler;
@@ -144,6 +144,18 @@ public class MetricsReporter {
         } catch (Exception e) {
             log.error("Failed to report metrics", e);
         }
+    }
+    
+    /**
+     * Set the current test ID for metrics reporting.
+     * This allows a single metrics reporter to report for different tests over time.
+     *
+     * @param testId Test identifier
+     */
+    public void setTestId(String testId) {
+        String oldTestId = this.testId;
+        this.testId = testId;
+        log.info("Metrics reporter testId updated: {} -> {}", oldTestId, testId);
     }
     
     /**

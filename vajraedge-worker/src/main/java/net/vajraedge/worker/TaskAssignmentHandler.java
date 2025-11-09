@@ -22,16 +22,19 @@ public class TaskAssignmentHandler {
     private final TaskRegistry taskRegistry;
     private final TaskExecutorService executorService;
     private final GrpcClient grpcClient;
+    private final MetricsReporter metricsReporter;
     
     // Track active test executions
     private final Map<String, TestExecution> activeTests = new ConcurrentHashMap<>();
     
     public TaskAssignmentHandler(TaskRegistry taskRegistry, 
                                   TaskExecutorService executorService,
-                                  GrpcClient grpcClient) {
+                                  GrpcClient grpcClient,
+                                  MetricsReporter metricsReporter) {
         this.taskRegistry = taskRegistry;
         this.executorService = executorService;
         this.grpcClient = grpcClient;
+        this.metricsReporter = metricsReporter;
     }
     
     /**
@@ -100,6 +103,9 @@ public class TaskAssignmentHandler {
             );
             
             activeTests.put(testId, execution);
+            
+            // Update metrics reporter to track this test
+            metricsReporter.setTestId(testId);
             
             // Start execution in background
             execution.start();
