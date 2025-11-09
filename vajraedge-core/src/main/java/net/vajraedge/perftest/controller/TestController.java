@@ -235,8 +235,22 @@ public class TestController {
         Map<String, DistributedTestService.DistributedTestInfo> activeTests = 
             distributedTestService.getActiveTests();
         
+        // Enrich each test with its metrics
+        Map<String, Map<String, Object>> enrichedTests = new HashMap<>();
+        for (Map.Entry<String, DistributedTestService.DistributedTestInfo> entry : activeTests.entrySet()) {
+            String testId = entry.getKey();
+            DistributedTestService.DistributedTestInfo testInfo = entry.getValue();
+            DistributedMetricsCollector.AggregatedMetrics metrics = 
+                distributedTestService.getTestMetrics(testId);
+            
+            Map<String, Object> testData = new HashMap<>();
+            testData.put("testInfo", testInfo);
+            testData.put("metrics", metrics);
+            enrichedTests.put(testId, testData);
+        }
+        
         Map<String, Object> response = new HashMap<>();
-        response.put("activeTests", activeTests);
+        response.put("activeTests", enrichedTests);
         response.put("count", activeTests.size());
         
         return ResponseEntity.ok(response);

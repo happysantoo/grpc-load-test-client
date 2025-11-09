@@ -1,6 +1,7 @@
 /**
  * Distributed Testing UI Logic
  */
+console.log('distributed.js loaded');
 
 let currentDistributedTestId = null;
 let workerRefreshInterval = null;
@@ -9,6 +10,7 @@ let metricsRefreshInterval = null;
 
 // Initialize distributed testing on page load
 $(document).ready(function() {
+    console.log('distributed.js document ready fired');
     setupDistributedFormHandlers();
     loadWorkers();
     // DON'T load tests on startup - let tab switching handle it
@@ -218,7 +220,7 @@ function updateDistributedMetrics(data) {
     $('#totalRequests').text(metrics.totalRequests?.toLocaleString() || '0');
     $('#successfulRequests').text(metrics.successfulRequests?.toLocaleString() || '0');
     $('#failedRequests').text(metrics.failedRequests?.toLocaleString() || '0');
-    $('#currentTps').text(metrics.currentTps?.toFixed(2) || '0.00');
+    $('#currentTps').text(metrics.totalTps?.toFixed(2) || '0.00');
     console.log('Updated request counts - total:', metrics.totalRequests);
     
     // Update success rate
@@ -261,14 +263,17 @@ function updateDistributedMetrics(data) {
  * Load and display workers
  */
 function loadWorkers() {
+    console.log('loadWorkers() called');
     $.ajax({
         url: '/api/workers',
         method: 'GET',
         success: function(response) {
+            console.log('Workers loaded:', response.totalCount, 'workers');
             displayWorkers(response.workers);
             updateWorkerSummary(response);
         },
-        error: function() {
+        error: function(xhr, status, error) {
+            console.error('Failed to load workers:', status, error);
             $('#workerList').html('<p class="text-danger">Failed to load workers</p>');
         }
     });
@@ -278,16 +283,20 @@ function loadWorkers() {
  * Load active distributed tests
  */
 function loadActiveDistributedTests() {
+    console.log('loadActiveDistributedTests() called');
     $.ajax({
         url: '/api/tests/distributed',
         method: 'GET',
         success: function(response) {
+            console.log('Active distributed tests loaded:', response.count, 'tests');
             displayActiveTests(response.activeTests, response.count);
         },
-        error: function(xhr) {
-            console.error('Failed to load active distributed tests:', xhr);
+        error: function(xhr, status, error) {
+            console.error('Failed to load active distributed tests:', status, error, xhr);
         }
     });
+}
+
 /**
  * Display active distributed tests in the Active Tests panel
  */
@@ -304,8 +313,9 @@ function displayActiveTests(activeTests, count) {
     console.log('Clearing and populating active tests list');
     listContainer.empty();
     
-    Object.entries(activeTests).forEach(([testId, testInfo]) => {
-        console.log('Adding test to list:', testId, testInfo);
+    Object.entries(activeTests).forEach(([testId, testData]) => {
+        console.log('Adding test to list:', testId, testData);
+        const testInfo = testData.testInfo || testData; // Support both old and new format
         const item = $(`
             <div class="list-group-item list-group-item-action" data-test-id="${testId}">
                 <div class="d-flex w-100 justify-content-between">
@@ -345,7 +355,9 @@ function displayActiveTests(activeTests, count) {
  * Display workers in the UI
  */
 function displayWorkers(workers) {
+    console.log('displayWorkers() called with', workers ? workers.length : 0, 'workers');
     if (!workers || workers.length === 0) {
+        console.log('No workers to display');
         $('#workerList').html('<p class="text-muted">No workers registered</p>');
         return;
     }
