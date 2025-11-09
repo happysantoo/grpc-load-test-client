@@ -43,6 +43,7 @@ public class Worker {
     private final TaskExecutorService taskExecutor;
     private final TaskAssignmentHandler assignmentHandler;
     private final MetricsReporter metricsReporter;
+    private final HeartbeatSender heartbeatSender;
     private final CountDownLatch shutdownLatch;
     private final String testId; // TODO: Make this configurable
     
@@ -65,6 +66,7 @@ public class Worker {
         this.taskExecutor = new TaskExecutorService(config.getMaxConcurrency());
         this.assignmentHandler = new TaskAssignmentHandler(taskRegistry, taskExecutor, grpcClient);
         this.metricsReporter = new MetricsReporter(config.getWorkerId(), testId, grpcClient, taskExecutor);
+        this.heartbeatSender = new HeartbeatSender(config.getWorkerId(), grpcClient, taskExecutor);
         this.shutdownLatch = new CountDownLatch(1);
         this.running = false;
         
@@ -105,15 +107,19 @@ public class Worker {
                 config.getMaxConcurrency()
             );
             log.info("Worker registered successfully");
-            
             // Start task executor
             taskExecutor.start();
             log.info("Task executor started");
+            
+            // Start heartbeat sender
+            heartbeatSender.start();
+            log.info("Heartbeat sender started");
             
             // Start metrics reporting
             metricsReporter.start();
             log.info("Metrics reporter started");
             
+            running = true;
             running = true;
             
             // Keep worker alive
@@ -144,6 +150,9 @@ public class Worker {
         try {
             // Stop accepting new tasks
             taskExecutor.stopAcceptingTasks();
+            
+            // Stop heartbeat sender
+            heartbeatSender.stop();
             
             // Stop metrics reporting
             metricsReporter.stop();
