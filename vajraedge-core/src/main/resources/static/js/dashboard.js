@@ -1177,10 +1177,315 @@ function formatDuration(seconds) {
     return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 }
 
+// ========================================
+// DISTRIBUTED TEST FUNCTIONALITY
+// ========================================
+
+let distributedTestsPolling = null;
+let currentDistributedTest = null;
+
+// Start distributed test
+document.getElementById('distributedTestForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const taskType = document.getElementById('distTaskType').value;
+    const targetTps = parseInt(document.getElementById('targetTps').value);
+    const duration = parseInt(document.getElementById('distDuration').value);
+    const rampUp = parseInt(document.getElementById('distRampUp').value);
+    const maxConcurrency = parseInt(document.getElementById('distMaxConcurrency').value);
+    const minWorkers = parseInt(document.getElementById('minWorkers').value);
+    
+    // Build task parameters based on task type
+    const taskParameters = {};
+    if (taskType === 'HTTP') {
+        taskParameters.url = document.getElementById('httpUrl').value;
+        taskParameters.method = document.getElementById('httpMethod').value;
+        taskParameters.timeoutSeconds = document.getElementById('httpTimeout').value;
+        const headers = document.getElementById('httpHeaders').value.trim();
+        if (headers) {
+            try {
+                taskParameters.headers = JSON.stringify(JSON.parse(headers));
+            } catch (e) {
+                alert('Invalid JSON in headers field');
+                return;
+            }
+        }
+    } else if (taskType === 'SLEEP') {
+        taskParameters.sleepDurationMs = document.getElementById('sleepDuration').value;
+    }
+    
+    const config = {
+        taskType,
+        targetTps,
+        durationSeconds: duration,
+        rampUpSeconds: rampUp,
+        maxConcurrency,
+        minWorkers,
+        taskParameters
+    };
+    
+    try {
+        document.getElementById('startDistSpinner').classList.remove('d-none');
+        document.getElementById('startDistBtn').disabled = true;
+        
+        const response = await fetch('/api/tests/distributed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('Distributed test started:', result.testId);
+            currentDistributedTest = result.testId;
+            document.getElementById('stopDistBtn').disabled = false;
+            
+            // Start polling for distributed test status
+            startDistributedTestsPolling();
+            
+            // Show success message
+            alert(`Distributed test started successfully!\nTest ID: ${result.testId}\nWorkers: ${result.testInfo.workerCount}`);
+        } else {
+            alert('Failed to start distributed test: ' + result.message);
+        }
+    } catch (error) {
+        console.error('Error starting distributed test:', error);
+        alert('Error starting distributed test: ' + error.message);
+    } finally {
+        document.getElementById('startDistSpinner').classList.add('d-none');
+        document.getElementById('startDistBtn').disabled = false;
+    }
+});
+
+// Stop distributed test
+document.getElementById('stopDistBtn')?.addEventListener('click', async () => {
+    if (!currentDistributedTest) return;
+    
+    try {
+        const response = await fetch(`/api/tests/distributed/${currentDistributedTest}/stop`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            console.log('Distributed test stopped');
+            document.getElementById('stopDistBtn').disabled = true;
+            currentDistributedTest = null;
+            stopDistributedTestsPolling();
+        }
+    } catch (error) {
+        console.error('Error stopping distributed test:', error);
+    }
+});
+
+// Poll distributed tests status
+function startDistributedTestsPolling() {
+    if (distributedTestsPolling) return;
+    
+    loadDistributedTests(); // Load immediately
+    
+    distributedTestsPolling = setInterval(() => {
+        loadDistributedTests();
+    }, 2000); // Poll every 2 seconds
+}
+
+function stopDistributedTestsPolling() {
+    if (distributedTestsPolling) {
+        clearInterval(distributedTestsPolling);
+        distributedTestsPolling = null;
+    }
+}
+
+// Load and display distributed tests
+async function loadDistributedTests() {
+    try {
+        const response = await fetch('/api/tests/distributed');
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        const listContainer = document.getElementById('activeTestsList');
+        
+        if (Object.keys(data.activeTests || {}).length === 0) {
+            // No distributed tests, check for single-node tests
+            loadActiveTests();
+            return;
+        }
+        
+        listContainer.innerHTML = '';
+        
+        // Display each distributed test
+        for (const [testId, test] of Object.entries(data.activeTests)) {
+            const metrics = test.metrics || {};
+            const item = document.createElement('div');
+            item.className = 'list-group-item list-group-item-action' + 
+                (testId === currentDistributedTest ? ' active' : '');
+            
+            item.innerHTML = `
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">🌐 ${testId.substring(0, 12)}</h6>
+                    <small class="status-running">●</small>
+                </div>
+                <small class="text-muted">${test.taskType || 'DISTRIBUTED'} | ${metrics.totalTps?.toFixed(0) || 0} TPS | ${formatNumber(metrics.totalRequests || 0)} reqs</small>
+            `;
+            
+            item.addEventListener('click', () => {
+                currentDistributedTest = testId;
+                showDistributedTestMetrics(testId, test);
+            });
+            
+            listContainer.appendChild(item);
+        }
+        
+        // Auto-select current test if active
+        if (currentDistributedTest && data.activeTests[currentDistributedTest]) {
+            showDistributedTestMetrics(currentDistributedTest, data.activeTests[currentDistributedTest]);
+        }
+        
+    } catch (error) {
+        console.error('Error loading distributed tests:', error);
+    }
+}
+
+// Show distributed test metrics in the middle panel
+function showDistributedTestMetrics(testId, test) {
+    const metrics = test.metrics || {};
+    const latency = metrics.latency || {};
+    
+    // Hide no-test message, show metrics panel
+    document.getElementById('noTestMessage').classList.add('d-none');
+    document.getElementById('metricsPanel').classList.remove('d-none');
+    
+    // Update test info
+    document.getElementById('currentTestId').textContent = testId;
+    document.getElementById('testStatus').textContent = test.status || 'RUNNING';
+    document.getElementById('testPhase').textContent = 'Distributed';
+    document.getElementById('testPhase').className = 'badge bg-info';
+    
+    // Update metrics
+    document.getElementById('totalRequests').textContent = formatNumber(metrics.totalRequests || 0);
+    document.getElementById('currentTps').textContent = (metrics.totalTps || 0).toFixed(1);
+    document.getElementById('activeTasks').textContent = formatNumber(metrics.activeTasks || 0);
+    document.getElementById('pendingTasks').textContent = formatNumber(metrics.pendingTasks || 0);
+    document.getElementById('avgLatency').textContent = formatLatency(latency.p50Ms);
+    
+    const successRate = metrics.totalRequests > 0 
+        ? (metrics.successfulRequests / metrics.totalRequests * 100) 
+        : 0;
+    document.getElementById('successRate').textContent = successRate.toFixed(2) + '%';
+    
+    // Update latency percentiles
+    document.getElementById('p50Latency').textContent = formatLatency(latency.p50Ms);
+    document.getElementById('p75Latency').textContent = formatLatency(latency.p75Ms);
+    document.getElementById('p90Latency').textContent = formatLatency(latency.p90Ms);
+    document.getElementById('p95Latency').textContent = formatLatency(latency.p95Ms);
+    document.getElementById('p99Latency').textContent = formatLatency(latency.p99Ms);
+    document.getElementById('p999Latency').textContent = formatLatency(latency.p999Ms);
+    
+    // Show worker metrics if available
+    if (test.workerMetrics && Object.keys(test.workerMetrics).length > 0) {
+        displayWorkerMetrics(test.workerMetrics);
+    }
+    
+    // TODO: Update charts with distributed test data
+    // This requires chart.js integration which can be added in Phase 2/3
+}
+
+// Display worker-level metrics
+function displayWorkerMetrics(workerMetrics) {
+    // This could be enhanced to show per-worker breakdown
+    console.log('Worker metrics:', workerMetrics);
+    
+    // For now, just log it. Phase 2/3 can add a detailed worker metrics panel
+}
+
+// Task type switcher for distributed form
+document.getElementById('distTaskType')?.addEventListener('change', function() {
+    const taskType = this.value;
+    document.getElementById('httpParams').classList.toggle('d-none', taskType !== 'HTTP');
+    document.getElementById('sleepParams').classList.toggle('d-none', taskType !== 'SLEEP');
+});
+
+// Refresh workers button
+document.getElementById('refreshWorkersBtn')?.addEventListener('click', loadWorkers);
+
+// Load workers status
+async function loadWorkers() {
+    try {
+        const response = await fetch('/api/workers');
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        const workerList = document.getElementById('workerList');
+        
+        if (data.totalCount === 0) {
+            workerList.innerHTML = '<p class="text-muted">No workers registered</p>';
+            return;
+        }
+        
+        workerList.innerHTML = `
+            <div class="mb-2">
+                <strong>${data.healthyCount}</strong> / ${data.totalCount} workers healthy
+            </div>
+        `;
+        
+        data.workers.forEach(worker => {
+            const workerCard = document.createElement('div');
+            workerCard.className = 'card mb-2';
+            workerCard.innerHTML = `
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>${worker.workerId}</strong>
+                            <br>
+                            <small class="text-muted">${worker.hostname}</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge ${worker.healthy ? 'bg-success' : 'bg-danger'}">
+                                ${worker.healthStatus}
+                            </span>
+                            <br>
+                            <small class="text-muted">${worker.currentLoad}/${worker.maxCapacity}</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+            workerList.appendChild(workerCard);
+        });
+        
+    } catch (error) {
+        console.error('Error loading workers:', error);
+    }
+}
+
 // Load active tests on page load
 window.addEventListener('load', function() {
     loadActiveTests();
+    loadWorkers();
     
-    // Refresh active tests every 5 seconds
-    setInterval(loadActiveTests, 5000);
+    // Check which tab is active and poll accordingly
+    const distributedTab = document.getElementById('distributed-tab');
+    if (distributedTab) {
+        distributedTab.addEventListener('shown.bs.tab', () => {
+            startDistributedTestsPolling();
+        });
+        
+        distributedTab.addEventListener('hidden.bs.tab', () => {
+            stopDistributedTestsPolling();
+        });
+    }
+    
+    // Start polling if distributed tab is already active
+    const distributedPane = document.getElementById('distributed');
+    if (distributedPane && distributedPane.classList.contains('active')) {
+        startDistributedTestsPolling();
+    }
+    
+    // Refresh single-node active tests every 5 seconds
+    setInterval(() => {
+        // Only poll single-node tests if not on distributed tab
+        const distTab = document.getElementById('distributed');
+        if (!distTab || !distTab.classList.contains('active')) {
+            loadActiveTests();
+        }
+    }, 5000);
 });
