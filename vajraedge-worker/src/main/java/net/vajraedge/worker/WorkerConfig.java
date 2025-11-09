@@ -138,9 +138,12 @@ public class WorkerConfig implements Runnable {
      * @return List of available task types
      */
     public List<String> getCapabilities() {
-        // TODO: Scan classpath for available TaskPlugin implementations
-        // For now, return empty list - will be implemented with plugin scanner
-        return new ArrayList<>();
+        // Return basic capabilities
+        // These will be validated against actual TaskRegistry at runtime
+        List<String> capabilities = new ArrayList<>();
+        capabilities.add("HTTP");
+        capabilities.add("SLEEP");
+        return capabilities;
     }
     
     /**

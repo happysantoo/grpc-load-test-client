@@ -1,5 +1,7 @@
 package net.vajraedge.worker;
 
+import net.vajraedge.worker.tasks.SimpleHttpTask;
+import net.vajraedge.worker.tasks.SleepTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,6 +57,10 @@ public class Worker {
         this.config = config;
         this.testId = "default-test"; // TODO: Get from task assignment
         this.taskRegistry = new TaskRegistry();
+        
+        // Register default tasks
+        registerDefaultTasks();
+        
         this.grpcClient = new GrpcClient(config.getControllerAddress());
         this.taskExecutor = new TaskExecutorService(config.getMaxConcurrency());
         this.assignmentHandler = new TaskAssignmentHandler(taskRegistry, taskExecutor, grpcClient);
@@ -64,6 +70,15 @@ public class Worker {
         
         // Wire up assignment handler in gRPC client
         grpcClient.setAssignmentHandler(assignmentHandler);
+    }
+    
+    /**
+     * Register default task types that are available out of the box.
+     */
+    private void registerDefaultTasks() {
+        taskRegistry.registerTask("HTTP", SimpleHttpTask.class);
+        taskRegistry.registerTask("SLEEP", SleepTask.class);
+        log.info("Registered {} default task types", taskRegistry.getSupportedTaskTypes().length);
     }
     
     /**
