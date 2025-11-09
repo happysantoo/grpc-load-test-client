@@ -80,6 +80,9 @@ class TestAPI {
         const endpoint = config.type === 'DISTRIBUTED' 
             ? '/api/tests/distributed' 
             : '/api/tests';
+        
+        console.log('Starting test at endpoint:', endpoint);
+        console.log('Request config:', JSON.stringify(config, null, 2));
             
         const response = await fetch(endpoint, {
             method: 'POST',
@@ -87,11 +90,18 @@ class TestAPI {
             body: JSON.stringify(config)
         });
         
+        console.log('Response status:', response.status);
+        console.log('Response OK:', response.ok);
+        
         if (!response.ok) {
-            throw new Error(`Failed to start test: ${response.statusText}`);
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
+            throw new Error(`Failed to start test: ${response.statusText} - ${errorText}`);
         }
         
-        return await response.json();
+        const result = await response.json();
+        console.log('Response data:', result);
+        return result;
     }
     
     /**
@@ -143,24 +153,24 @@ class TestController {
     }
     
     setupEventListeners() {
-        // Test type radio buttons
-        document.querySelectorAll('input[name="testType"]').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                appState.currentMode = e.target.value;
-                this.toggleConfigForm();
+        // Load plugins first
+        this.loadTaskPlugins();
+        
+        // Setup form handlers
+        this.setupFormHandlers();
+        
+        // Setup task type switcher for distributed form
+        const distTaskType = document.getElementById('distTaskType');
+        if (distTaskType) {
+            distTaskType.addEventListener('change', (e) => {
+                const taskType = e.target.value;
+                const httpParams = document.getElementById('httpParams');
+                const sleepParams = document.getElementById('sleepParams');
+                if (httpParams && sleepParams) {
+                    httpParams.classList.toggle('d-none', taskType !== 'HTTP');
+                    sleepParams.classList.toggle('d-none', taskType !== 'SLEEP');
+                }
             });
-        });
-        
-        // Single-node form
-        const singleNodeForm = document.getElementById('testConfigForm');
-        if (singleNodeForm) {
-            singleNodeForm.addEventListener('submit', (e) => this.handleStartTest(e, 'SINGLE_NODE'));
-        }
-        
-        // Distributed form
-        const distributedForm = document.getElementById('distributedTestForm');
-        if (distributedForm) {
-            distributedForm.addEventListener('submit', (e) => this.handleStartTest(e, 'DISTRIBUTED'));
         }
         
         // Stop buttons (both single-node and distributed)
@@ -177,6 +187,97 @@ class TestController {
         const refreshWorkersBtn = document.getElementById('refreshWorkersBtn');
         if (refreshWorkersBtn) {
             refreshWorkersBtn.addEventListener('click', () => this.loadWorkers());
+        }
+        
+        // Ramp strategy switcher
+        const rampStrategy = document.getElementById('rampStrategy');
+        if (rampStrategy) {
+            rampStrategy.addEventListener('change', (e) => {
+                const stepFields = document.getElementById('stepStrategyFields');
+                const linearFields = document.getElementById('linearStrategyFields');
+                if (stepFields && linearFields) {
+                    if (e.target.value === 'STEP') {
+                        stepFields.classList.remove('d-none');
+                        linearFields.classList.add('d-none');
+                    } else {
+                        stepFields.classList.add('d-none');
+                        linearFields.classList.remove('d-none');
+                    }
+                }
+            });
+        }
+        
+        // Test mode switcher
+        const testMode = document.getElementById('testMode');
+        if (testMode) {
+            testMode.addEventListener('change', (e) => {
+                const tpsLimitField = document.getElementById('tpsLimitField');
+                if (tpsLimitField) {
+                    tpsLimitField.classList.toggle('d-none', e.target.value !== 'RATE_LIMITED');
+                }
+            });
+        }
+    }
+    
+    setupFormHandlers() {
+        // Single-node form
+        const singleNodeForm = document.getElementById('testConfigForm');
+        if (singleNodeForm) {
+            singleNodeForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleStartTest(e, 'SINGLE_NODE');
+            });
+        }
+        
+        // Distributed form
+        const distributedForm = document.getElementById('distributedTestForm');
+        if (distributedForm) {
+            distributedForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleStartTest(e, 'DISTRIBUTED');
+            });
+        }
+    }
+    
+    async loadTaskPlugins() {
+        try {
+            const response = await fetch('/plugins');
+            if (!response.ok) {
+                console.log('Plugins endpoint not available, using defaults');
+                this.loadDefaultTaskTypes();
+                return;
+            }
+            
+            const plugins = await response.json();
+            const taskTypeSelect = document.getElementById('taskType');
+            
+            if (taskTypeSelect && plugins.length > 0) {
+                taskTypeSelect.innerHTML = '';
+                plugins.forEach(plugin => {
+                    const option = document.createElement('option');
+                    option.value = plugin.taskType;
+                    option.textContent = `${plugin.taskType} - ${plugin.description}`;
+                    taskTypeSelect.appendChild(option);
+                });
+                
+                // Trigger change to load first plugin's parameters
+                taskTypeSelect.dispatchEvent(new Event('change'));
+            } else {
+                this.loadDefaultTaskTypes();
+            }
+        } catch (error) {
+            console.error('Error loading plugins:', error);
+            this.loadDefaultTaskTypes();
+        }
+    }
+    
+    loadDefaultTaskTypes() {
+        const taskTypeSelect = document.getElementById('taskType');
+        if (taskTypeSelect) {
+            taskTypeSelect.innerHTML = `
+                <option value="HTTP">HTTP - HTTP request task</option>
+                <option value="SLEEP">SLEEP - Simple sleep task for testing</option>
+            `;
         }
     }
     
@@ -196,14 +297,20 @@ class TestController {
     async handleStartTest(e, type) {
         e.preventDefault();
         
+        console.log('handleStartTest called with type:', type);
+        
         const config = this.buildTestConfig(type);
+        console.log('Config built, calling API...');
         
         try {
             const result = await this.api.startTest(config);
+            console.log('API call completed, result:', result);
             
             if (result.success || result.testId) {
                 const testId = result.testId;
                 appState.selectedTest = testId;
+                
+                console.log('Test started successfully, testId:', testId);
                 
                 // Refresh immediately to show new test
                 await this.refreshAllTests();
@@ -213,6 +320,7 @@ class TestController {
                 
                 console.log(`${type} test started:`, testId);
             } else {
+                console.error('Test start failed, result:', result);
                 alert('Failed to start test: ' + (result.message || 'Unknown error'));
             }
         } catch (error) {
@@ -222,32 +330,38 @@ class TestController {
     }
     
     buildTestConfig(type) {
+        console.log('Building config for type:', type);
+        
         if (type === 'SINGLE_NODE') {
-            return {
+            const config = {
                 type: 'SINGLE_NODE',
-                testMode: document.getElementById('testMode').value,
-                startingConcurrency: parseInt(document.getElementById('startingConcurrency').value),
-                maxConcurrency: parseInt(document.getElementById('maxConcurrency').value),
-                rampStrategy: document.getElementById('rampStrategy').value,
-                rampStep: parseInt(document.getElementById('rampStep')?.value || 10),
-                rampInterval: parseInt(document.getElementById('rampInterval')?.value || 30),
-                rampDuration: parseInt(document.getElementById('rampDuration')?.value || 60),
-                sustainDuration: parseInt(document.getElementById('sustainDuration').value),
-                targetTps: parseInt(document.getElementById('targetTpsLimit')?.value || 0),
-                taskType: document.getElementById('taskType').value,
-                taskParameters: this.buildTaskParameters(document.getElementById('taskType').value)
+                testMode: document.getElementById('testMode')?.value || 'CONCURRENCY_BASED',
+                startingConcurrency: parseInt(document.getElementById('startingConcurrency')?.value || '10'),
+                maxConcurrency: parseInt(document.getElementById('maxConcurrency')?.value || '100'),
+                rampStrategy: document.getElementById('rampStrategy')?.value || 'LINEAR',
+                rampStep: parseInt(document.getElementById('rampStep')?.value || '10'),
+                rampInterval: parseInt(document.getElementById('rampInterval')?.value || '30'),
+                rampDuration: parseInt(document.getElementById('rampDuration')?.value || '60'),
+                sustainDuration: parseInt(document.getElementById('sustainDuration')?.value || '60'),
+                targetTps: parseInt(document.getElementById('targetTpsLimit')?.value || '0'),
+                taskType: document.getElementById('taskType')?.value || 'HTTP',
+                taskParameters: this.buildTaskParameters(document.getElementById('taskType')?.value || 'HTTP')
             };
+            console.log('Built single-node config:', config);
+            return config;
         } else {
-            return {
+            const config = {
                 type: 'DISTRIBUTED',
-                taskType: document.getElementById('distTaskType').value,
-                targetTps: parseInt(document.getElementById('targetTps').value),
-                durationSeconds: parseInt(document.getElementById('distDuration').value),
-                rampUpSeconds: parseInt(document.getElementById('distRampUp').value),
-                maxConcurrency: parseInt(document.getElementById('distMaxConcurrency').value),
-                minWorkers: parseInt(document.getElementById('minWorkers').value),
-                taskParameters: this.buildTaskParameters(document.getElementById('distTaskType').value, true)
+                taskType: document.getElementById('distTaskType')?.value || 'HTTP',
+                targetTps: parseInt(document.getElementById('targetTps')?.value || '1000'),
+                durationSeconds: parseInt(document.getElementById('distDuration')?.value || '60'),
+                rampUpSeconds: parseInt(document.getElementById('distRampUp')?.value || '10'),
+                maxConcurrency: parseInt(document.getElementById('distMaxConcurrency')?.value || '1000'),
+                minWorkers: parseInt(document.getElementById('minWorkers')?.value || '1'),
+                taskParameters: this.buildTaskParameters(document.getElementById('distTaskType')?.value || 'HTTP', true)
             };
+            console.log('Built distributed config:', config);
+            return config;
         }
     }
     
@@ -255,29 +369,30 @@ class TestController {
         const params = {};
         
         if (taskType === 'HTTP') {
-            const urlField = isDistributed ? 'httpUrl' : 'httpTargetUrl';
-            const methodField = isDistributed ? 'httpMethod' : 'httpRequestMethod';
-            const timeoutField = isDistributed ? 'httpTimeout' : 'httpTimeoutSeconds';
-            const headersField = isDistributed ? 'httpHeaders' : 'httpRequestHeaders';
+            // Use different field IDs for single-node vs distributed
+            const urlId = isDistributed ? 'httpUrl' : 'httpUrlSingle';
+            const methodId = isDistributed ? 'httpMethod' : 'httpMethodSingle';
+            const timeoutId = isDistributed ? 'httpTimeout' : 'httpTimeoutSingle';
             
-            params.url = document.getElementById(urlField)?.value;
-            params.method = document.getElementById(methodField)?.value;
-            params.timeoutSeconds = document.getElementById(timeoutField)?.value;
+            params.url = document.getElementById(urlId)?.value || 'http://localhost:8080/actuator/health';
+            params.method = document.getElementById(methodId)?.value || 'GET';
+            params.timeoutSeconds = parseInt(document.getElementById(timeoutId)?.value || '30');
             
-            const headers = document.getElementById(headersField)?.value?.trim();
+            const headersId = isDistributed ? 'httpHeaders' : 'httpHeadersSingle';
+            const headers = document.getElementById(headersId)?.value?.trim();
             if (headers) {
                 try {
-                    params.headers = JSON.stringify(JSON.parse(headers));
+                    params.headers = JSON.parse(headers);
                 } catch (e) {
-                    console.warn('Invalid JSON in headers, using as-is');
-                    params.headers = headers;
+                    console.warn('Invalid JSON in headers, ignoring');
                 }
             }
         } else if (taskType === 'SLEEP') {
-            const sleepField = isDistributed ? 'sleepDuration' : 'sleepDurationMs';
-            params.sleepDurationMs = document.getElementById(sleepField)?.value;
+            const sleepId = isDistributed ? 'sleepDuration' : 'sleepDurationSingle';
+            params.sleepDurationMs = parseInt(document.getElementById(sleepId)?.value || '1000');
         }
         
+        console.log('Built task parameters for', taskType, ':', params);
         return params;
     }
     
@@ -472,8 +587,8 @@ class TestController {
     
     initializeWebSocket() {
         // WebSocket connection for real-time single-node metrics
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        // SockJS handles protocol internally, just provide the path
+        const wsUrl = '/ws';
         
         try {
             this.websocket = new SockJS(wsUrl);
@@ -489,6 +604,7 @@ class TestController {
             });
         } catch (error) {
             console.error('Failed to initialize WebSocket:', error);
+            this.updateConnectionStatus(false);
         }
     }
     

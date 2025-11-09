@@ -134,7 +134,27 @@
                             
                             <!-- Dynamic task parameters container -->
                             <div id="taskParametersContainer">
-                                <!-- Parameter fields will be dynamically inserted here -->
+                                <!-- HTTP Task Parameters (visible by default) -->
+                                <div id="httpParamsSingle" class="mb-3">
+                                    <h6 class="border-bottom pb-2">HTTP Request Parameters</h6>
+                                    <div class="mb-3">
+                                        <label for="httpUrl" class="form-label">Target URL</label>
+                                        <input type="url" class="form-control" id="httpUrlSingle" value="http://localhost:8080/actuator/health" placeholder="http://example.com/api">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="httpMethod" class="form-label">HTTP Method</label>
+                                        <select class="form-select" id="httpMethodSingle">
+                                            <option value="GET" selected>GET</option>
+                                            <option value="POST">POST</option>
+                                            <option value="PUT">PUT</option>
+                                            <option value="DELETE">DELETE</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="httpTimeout" class="form-label">Timeout (seconds)</label>
+                                        <input type="number" class="form-control" id="httpTimeoutSingle" value="30" min="1" max="300">
+                                    </div>
+                                </div>
                             </div>
                             
                             <div class="d-grid gap-2">
