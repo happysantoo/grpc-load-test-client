@@ -143,6 +143,10 @@ class TestController {
     constructor() {
         this.api = new TestAPI();
         this.websocket = null;
+        this.currentSubscription = null;
+        this.metricsPollingInterval = null;
+        this.lastRenderTime = 0;
+        this.renderThrottleMs = 1000; // Only update UI once per second
         this.init();
     }
     
@@ -342,10 +346,11 @@ class TestController {
                 rampStep: parseInt(document.getElementById('rampStep')?.value || '10'),
                 rampInterval: parseInt(document.getElementById('rampInterval')?.value || '30'),
                 rampDuration: parseInt(document.getElementById('rampDuration')?.value || '60'),
-                sustainDuration: parseInt(document.getElementById('sustainDuration')?.value || '60'),
+                sustainDuration: parseInt(document.getElementById('sustainDuration')?.value || '0'),
+                testDurationSeconds: parseInt(document.getElementById('testDuration')?.value || '300'),
                 targetTps: parseInt(document.getElementById('targetTpsLimit')?.value || '0'),
                 taskType: document.getElementById('taskType')?.value || 'HTTP',
-                taskParameters: this.buildTaskParameters(document.getElementById('taskType')?.value || 'HTTP')
+                taskParameter: this.buildTaskParameters(document.getElementById('taskType')?.value || 'HTTP')
             };
             console.log('Built single-node config:', config);
             return config;
@@ -358,7 +363,7 @@ class TestController {
                 rampUpSeconds: parseInt(document.getElementById('distRampUp')?.value || '10'),
                 maxConcurrency: parseInt(document.getElementById('distMaxConcurrency')?.value || '1000'),
                 minWorkers: parseInt(document.getElementById('minWorkers')?.value || '1'),
-                taskParameters: this.buildTaskParameters(document.getElementById('distTaskType')?.value || 'HTTP', true)
+                taskParameter: this.buildTaskParameters(document.getElementById('distTaskType')?.value || 'HTTP', true)
             };
             console.log('Built distributed config:', config);
             return config;
@@ -374,9 +379,27 @@ class TestController {
             const methodId = isDistributed ? 'httpMethod' : 'httpMethodSingle';
             const timeoutId = isDistributed ? 'httpTimeout' : 'httpTimeoutSingle';
             
-            params.url = document.getElementById(urlId)?.value || 'http://localhost:8080/actuator/health';
-            params.method = document.getElementById(methodId)?.value || 'GET';
-            params.timeoutSeconds = parseInt(document.getElementById(timeoutId)?.value || '30');
+            const urlElement = document.getElementById(urlId);
+            const methodElement = document.getElementById(methodId);
+            const timeoutElement = document.getElementById(timeoutId);
+            
+            params.url = urlElement?.value?.trim() || 'http://localhost:8080/actuator/health';
+            params.method = methodElement?.value?.trim() || 'GET';
+            
+            const timeoutValue = timeoutElement?.value?.trim() || '30';
+            params.timeoutSeconds = parseInt(timeoutValue, 10);
+            
+            // Validate parsed values
+            if (isNaN(params.timeoutSeconds)) {
+                console.warn('Invalid timeout value:', timeoutValue, '- using default 30');
+                params.timeoutSeconds = 30;
+            }
+            
+            console.log('HTTP params debug:', {
+                urlId, urlElement: !!urlElement, url: params.url,
+                methodId, methodElement: !!methodElement, method: params.method,
+                timeoutId, timeoutElement: !!timeoutElement, timeout: params.timeoutSeconds
+            });
             
             const headersId = isDistributed ? 'httpHeaders' : 'httpHeadersSingle';
             const headers = document.getElementById(headersId)?.value?.trim();
@@ -389,7 +412,12 @@ class TestController {
             }
         } else if (taskType === 'SLEEP') {
             const sleepId = isDistributed ? 'sleepDuration' : 'sleepDurationSingle';
-            params.sleepDurationMs = parseInt(document.getElementById(sleepId)?.value || '1000');
+            const sleepValue = document.getElementById(sleepId)?.value?.trim() || '1000';
+            params.sleepDurationMs = parseInt(sleepValue, 10);
+            if (isNaN(params.sleepDurationMs)) {
+                console.warn('Invalid sleep duration:', sleepValue, '- using default 1000');
+                params.sleepDurationMs = 1000;
+            }
         }
         
         console.log('Built task parameters for', taskType, ':', params);
@@ -492,8 +520,15 @@ class TestController {
     }
     
     selectTest(testId) {
+        console.log('Selecting test:', testId);
+        
         const test = appState.activeTests.get(testId);
-        if (!test) return;
+        if (!test) {
+            console.warn('Test not found:', testId);
+            return;
+        }
+        
+        console.log('Test details:', test);
         
         appState.selectedTest = testId;
         this.renderTestList(); // Re-render to update highlighting
@@ -521,14 +556,58 @@ class TestController {
         
         // Subscribe to real-time updates based on type
         if (test.type === 'SINGLE_NODE') {
-            this.subscribeToWebSocket(testId);
+            if (appState.websocketConnection) {
+                this.subscribeToWebSocket(testId);
+            } else {
+                console.warn('WebSocket not connected, will use polling for metrics');
+                // Fallback: fetch metrics via REST API
+                this.startMetricsPolling(testId);
+            }
         }
         // Distributed tests get metrics from polling (already in test.metrics)
     }
     
+    startMetricsPolling(testId) {
+        // Clear any existing polling interval
+        if (this.metricsPollingInterval) {
+            clearInterval(this.metricsPollingInterval);
+        }
+        
+        // Poll metrics every 2 seconds to prevent browser overload
+        this.metricsPollingInterval = setInterval(async () => {
+            // Stop polling if test is no longer selected
+            if (appState.selectedTest !== testId) {
+                clearInterval(this.metricsPollingInterval);
+                this.metricsPollingInterval = null;
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/tests/${testId}/metrics`);
+                if (response.ok) {
+                    const metrics = await response.json();
+                    const test = appState.activeTests.get(testId);
+                    if (test) {
+                        test.metrics = metrics;
+                        this.renderMetrics(test);
+                    }
+                }
+            } catch (error) {
+                console.error('Error polling metrics:', error);
+            }
+        }, 2000);
+    }
+    
     renderMetrics(test) {
+        // Throttle rendering to prevent browser crash from too many DOM updates
+        const now = Date.now();
+        if (now - this.lastRenderTime < this.renderThrottleMs) {
+            return; // Skip this render, too soon since last update
+        }
+        this.lastRenderTime = now;
+        
         const metrics = test.metrics || {};
-        const latency = metrics.latency || {};
+        const latency = metrics.latencyPercentiles || metrics.latency || {};
         
         // Update test info
         document.getElementById('currentTestId').textContent = test.testId;
@@ -549,14 +628,21 @@ class TestController {
             : (metrics.totalRequests > 0 ? (metrics.successfulRequests / metrics.totalRequests * 100) : 0);
         document.getElementById('successRate').textContent = successRate.toFixed(2) + '%';
         
-        // Latency percentiles
-        document.getElementById('avgLatency').textContent = this.formatLatency(latency.avgMs || latency.p50Ms);
-        document.getElementById('p50').textContent = this.formatLatency(latency.p50Ms);
-        document.getElementById('p75').textContent = this.formatLatency(latency.p75Ms);
-        document.getElementById('p90').textContent = this.formatLatency(latency.p90Ms);
-        document.getElementById('p95').textContent = this.formatLatency(latency.p95Ms);
-        document.getElementById('p99').textContent = this.formatLatency(latency.p99Ms);
-        document.getElementById('p999').textContent = this.formatLatency(latency.p999Ms);
+        // Latency percentiles - ALL values are already in milliseconds
+        // Despite the name, avgLatencyMs and latencyPercentiles.p50 etc. are all in the same unit (ms)
+        const avgLatency = metrics.avgLatencyMs || 0;
+        document.getElementById('avgLatency').textContent = this.formatLatency(avgLatency);
+        document.getElementById('p50').textContent = this.formatLatency(latency.p50Ms || latency.p50 || 0);
+        document.getElementById('p75').textContent = this.formatLatency(latency.p75Ms || latency.p75 || 0);
+        document.getElementById('p90').textContent = this.formatLatency(latency.p90Ms || latency.p90 || 0);
+        document.getElementById('p95').textContent = this.formatLatency(latency.p95Ms || latency.p95 || 0);
+        document.getElementById('p99').textContent = this.formatLatency(latency.p99Ms || latency.p99 || 0);
+        document.getElementById('p999').textContent = this.formatLatency(latency.p999Ms || latency['p99.9'] || 0);
+        
+        // Update charts if available and metrics exist
+        if (typeof window.updateCharts === 'function' && metrics.totalRequests !== undefined) {
+            window.updateCharts(metrics, test.type === 'DISTRIBUTED' ? 'distributed' : 'single');
+        }
         
         // Worker breakdown for distributed tests
         if (test.type === 'DISTRIBUTED' && test.workerMetrics) {
@@ -572,6 +658,14 @@ class TestController {
     showMetricsPanel() {
         document.getElementById('noTestMessage')?.classList.add('d-none');
         document.getElementById('metricsPanel')?.classList.remove('d-none');
+        
+        // Initialize charts if not already initialized
+        if (typeof window.initializeCharts === 'function') {
+            if (!window.tpsChart || !window.latencyChart) {
+                console.log('Initializing charts...');
+                window.initializeCharts();
+            }
+        }
     }
     
     hideMetricsPanel() {
@@ -590,35 +684,48 @@ class TestController {
         // SockJS handles protocol internally, just provide the path
         const wsUrl = '/ws';
         
+        console.log('Initializing WebSocket connection to:', wsUrl);
+        
         try {
             this.websocket = new SockJS(wsUrl);
             const stompClient = Stomp.over(this.websocket);
             
+            // Reduce STOMP debug output
+            stompClient.debug = null;
+            
             stompClient.connect({}, () => {
-                console.log('WebSocket connected');
+                console.log('✓ WebSocket connected successfully');
                 appState.websocketConnection = stompClient;
                 this.updateConnectionStatus(true);
             }, (error) => {
-                console.error('WebSocket error:', error);
+                console.error('✗ WebSocket connection error:', error);
                 this.updateConnectionStatus(false);
             });
         } catch (error) {
-            console.error('Failed to initialize WebSocket:', error);
+            console.error('✗ Failed to initialize WebSocket:', error);
             this.updateConnectionStatus(false);
         }
     }
     
     subscribeToWebSocket(testId) {
         if (!appState.websocketConnection) {
-            console.warn('WebSocket not connected');
+            console.warn('WebSocket not connected, cannot subscribe to test:', testId);
             return;
+        }
+        
+        // Unsubscribe from previous test if any
+        if (this.currentSubscription) {
+            console.log('Unsubscribing from previous test');
+            this.currentSubscription.unsubscribe();
         }
         
         // Subscribe to metrics topic for this test
         const topic = `/topic/metrics/${testId}`;
+        console.log('Subscribing to WebSocket topic:', topic);
         
-        appState.websocketConnection.subscribe(topic, (message) => {
+        this.currentSubscription = appState.websocketConnection.subscribe(topic, (message) => {
             const metrics = JSON.parse(message.body);
+            console.log('Received WebSocket metrics:', metrics);
             
             // Update test metrics in state
             const test = appState.activeTests.get(testId);
@@ -631,6 +738,8 @@ class TestController {
                 }
             }
         });
+        
+        console.log('WebSocket subscription created for test:', testId);
     }
     
     updateConnectionStatus(connected) {

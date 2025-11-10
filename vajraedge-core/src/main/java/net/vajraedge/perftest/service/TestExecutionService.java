@@ -255,7 +255,7 @@ public class TestExecutionService {
         return switch (taskTypeName) {
             case "SLEEP" -> taskId -> createSleepTask(taskId, getIntParameter(taskParameter));
             case "CPU" -> this::createCpuTask;
-            case "HTTP" -> taskId -> createHttpTask(getStringParameter(taskParameter));
+            case "HTTP" -> taskId -> createHttpTask(taskParameter);
             default -> {
                 logger.warn("Unknown task type: {}, defaulting to SLEEP", taskTypeName);
                 yield taskId -> createSleepTask(taskId, getIntParameter(taskParameter));
@@ -339,7 +339,18 @@ public class TestExecutionService {
         };
     }
     
-    private Task createHttpTask(String url) {
+    private Task createHttpTask(Object taskParameter) {
+        // Support both string URL (backward compatibility) and object with parameters
+        if (taskParameter instanceof String) {
+            return new HttpTask((String) taskParameter);
+        }
+        
+        // Handle Map/object parameters
+        Map<String, Object> params = convertToParameterMap(taskParameter);
+        String url = (String) params.getOrDefault("url", "http://localhost:8080/actuator/health");
+        
+        // For now, HttpTask only accepts URL. Future enhancement: support method, timeout
+        logger.debug("Creating HTTP task with URL: {}", url);
         return new HttpTask(url);
     }
     
