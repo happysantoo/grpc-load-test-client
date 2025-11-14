@@ -11,7 +11,7 @@ import spock.lang.Specification
 /**
  * Additional tests to improve coverage of TestExecutionService
  */
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = ["spring.profiles.active=test"])
 class TestExecutionServiceAdditionalSpec extends Specification {
 
     @Autowired

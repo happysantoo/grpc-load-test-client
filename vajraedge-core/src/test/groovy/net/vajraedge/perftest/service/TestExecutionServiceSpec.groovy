@@ -10,7 +10,7 @@ import spock.lang.Unroll
 /**
  * Enhanced integration tests for TestExecutionService
  */
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = ["spring.profiles.active=test"])
 class TestExecutionServiceSpec extends Specification {
 
     @Autowired

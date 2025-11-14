@@ -6,6 +6,7 @@ import net.vajraedge.perftest.distributed.WorkerServiceImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -13,24 +14,18 @@ import java.io.IOException;
 
 /**
  * Configuration for gRPC server for distributed testing.
+ * Only activated when vajraedge.grpc.enabled=true
  */
 @Configuration
+@ConditionalOnProperty(name = "vajraedge.grpc.enabled", havingValue = "true")
 public class GrpcServerConfig {
     private static final Logger log = LoggerFactory.getLogger(GrpcServerConfig.class);
     
     @Value("${vajraedge.grpc.port:9090}")
     private int grpcPort;
     
-    @Value("${vajraedge.grpc.enabled:false}")
-    private boolean grpcEnabled;
-    
     @Bean
     public Server grpcServer(WorkerServiceImpl workerService) throws IOException {
-        if (!grpcEnabled) {
-            log.info("gRPC server disabled. Set vajraedge.grpc.enabled=true to enable distributed testing.");
-            return null;
-        }
-        
         Server server = ServerBuilder.forPort(grpcPort)
                 .addService(workerService)
                 .build();

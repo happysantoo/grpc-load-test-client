@@ -6,6 +6,7 @@ import net.vajraedge.perftest.service.TestExecutionService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
 /**
  * WebSocket handler for broadcasting real-time metrics updates.
  */
+@ConditionalOnProperty(name = "vajraedge.websocket.enabled", havingValue = "true", matchIfMissing = true)
 @Component
 public class MetricsWebSocketHandler {
     
