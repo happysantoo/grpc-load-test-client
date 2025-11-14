@@ -1,8 +1,10 @@
 package net.vajraedge.perftest.controller
 
+import net.vajraedge.perftest.distributed.WorkerManager
 import net.vajraedge.perftest.dto.TestConfigRequest
 import net.vajraedge.perftest.dto.TestStatusResponse
 import net.vajraedge.perftest.sdk.plugin.PluginRegistry
+import net.vajraedge.perftest.service.DistributedTestService
 import net.vajraedge.perftest.service.TestExecutionService
 import net.vajraedge.perftest.validation.PreFlightValidator
 import net.vajraedge.perftest.validation.ValidationResult
@@ -40,6 +42,12 @@ class TestControllerSpec extends Specification {
     
     @MockBean
     PluginRegistry pluginRegistry
+    
+    @MockBean
+    DistributedTestService distributedTestService
+    
+    @MockBean
+    WorkerManager workerManager
 
     @Autowired
     ObjectMapper objectMapper

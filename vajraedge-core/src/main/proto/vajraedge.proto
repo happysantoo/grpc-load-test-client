@@ -1,0 +1,275 @@
+syntax = "proto3";
+
+package vajraedge.distributed;
+
+option java_package = "net.vajraedge.perftest.proto";
+option java_multiple_files = true;
+option java_outer_classname = "VajraEdgeProto";
+
+/**
+ * VajraEdge Distributed Testing Protocol
+ * 
+ * This protocol defines the communication between the master controller
+ * and distributed worker nodes for load testing.
+ * 
+ * Key Design Principles:
+ * - Workers register their capabilities (supported task types)
+ * - Master distributes tasks by name only (no auth data)
+ * - Workers handle authentication locally
+ * - Real-time metrics streaming from workers to master
+ */
+
+// ============================================================================
+// Worker Management Service
+// ============================================================================
+
+service WorkerService {
+    // Worker registers with master, providing capabilities and capacity
+    rpc RegisterWorker(WorkerRegistrationRequest) returns (WorkerRegistrationResponse);
+    
+    // Periodic heartbeat to maintain worker health status
+    rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+    
+    // Master assigns tasks to worker (just task name + parameters)
+    rpc AssignTask(TaskAssignment) returns (TaskAssignmentResponse);
+    
+    // Master requests worker to stop test execution
+    rpc StopTest(StopTestRequest) returns (StopTestResponse);
+    
+    // Worker streams metrics to master in real-time
+    rpc StreamMetrics(stream WorkerMetrics) returns (MetricsAcknowledgment);
+}
+
+// ============================================================================
+// Worker Registration
+// ============================================================================
+
+message WorkerRegistrationRequest {
+    // Unique identifier for this worker instance
+    string worker_id = 1;
+    
+    // Hostname/IP for debugging and monitoring
+    string hostname = 2;
+    
+    // Maximum concurrent tasks this worker can handle
+    int32 max_capacity = 3;
+    
+    // List of task types this worker supports (e.g., "HTTP_GET", "DATABASE_QUERY")
+    repeated string supported_task_types = 4;
+    
+    // Worker version for compatibility checking
+    string version = 5;
+    
+    // Optional metadata (e.g., region, environment, tags)
+    map<string, string> metadata = 6;
+}
+
+message WorkerRegistrationResponse {
+    // Whether registration was accepted
+    bool accepted = 1;
+    
+    // Message explaining acceptance/rejection
+    string message = 2;
+    
+    // How often worker should send heartbeats (seconds)
+    int32 heartbeat_interval_seconds = 3;
+    
+    // How often worker should send metrics (seconds)
+    int32 metrics_interval_seconds = 4;
+    
+    // Assigned worker ID (may differ from requested if conflict)
+    string assigned_worker_id = 5;
+}
+
+// ============================================================================
+// Heartbeat / Health Check
+// ============================================================================
+
+message HeartbeatRequest {
+    // Worker identifier
+    string worker_id = 1;
+    
+    // Current number of active tasks
+    int32 current_load = 2;
+    
+    // Worker's current status
+    WorkerStatus status = 3;
+    
+    // Timestamp of heartbeat
+    int64 timestamp_ms = 4;
+}
+
+message HeartbeatResponse {
+    // Whether master considers worker healthy
+    bool healthy = 1;
+    
+    // Optional message (e.g., warnings, instructions)
+    string message = 2;
+}
+
+enum WorkerStatus {
+    WORKER_STATUS_UNKNOWN = 0;
+    WORKER_STATUS_IDLE = 1;
+    WORKER_STATUS_RUNNING = 2;
+    WORKER_STATUS_OVERLOADED = 3;
+    WORKER_STATUS_ERROR = 4;
+}
+
+// ============================================================================
+// Task Assignment
+// ============================================================================
+
+message TaskAssignment {
+    // Test identifier (groups all tasks for same test)
+    string test_id = 1;
+    
+    // Name of the task type (e.g., "HTTP_GET", "GRPC_CALL")
+    // Worker looks up corresponding @VajraTask implementation
+    string task_type = 2;
+    
+    // Generic parameters for task execution
+    // Worker's Task.initialize() reads these as needed
+    map<string, string> parameters = 3;
+    
+    // Target transactions per second for this worker
+    int32 target_tps = 4;
+    
+    // Duration to run this task (seconds)
+    int64 duration_seconds = 5;
+    
+    // Ramp-up duration before reaching target TPS (seconds)
+    int32 ramp_up_seconds = 6;
+    
+    // Max concurrent tasks to allow on this worker
+    int32 max_concurrency = 7;
+    
+    // Assignment timestamp
+    int64 assigned_at_ms = 8;
+}
+
+message TaskAssignmentResponse {
+    // Whether worker accepted the task assignment
+    bool accepted = 1;
+    
+    // Message explaining acceptance/rejection
+    string message = 2;
+    
+    // Estimated number of tasks this worker will execute
+    int64 estimated_task_count = 3;
+}
+
+// ============================================================================
+// Test Control
+// ============================================================================
+
+message StopTestRequest {
+    // Test identifier to stop
+    string test_id = 1;
+    
+    // Whether to stop gracefully (wait for current tasks) or immediately
+    bool graceful = 2;
+    
+    // Timeout for graceful shutdown (seconds)
+    int32 timeout_seconds = 3;
+}
+
+message StopTestResponse {
+    // Whether stop was successful
+    bool stopped = 1;
+    
+    // Message with stop details
+    string message = 2;
+    
+    // Number of tasks that were interrupted
+    int32 tasks_interrupted = 3;
+}
+
+// ============================================================================
+// Metrics Reporting
+// ============================================================================
+
+message WorkerMetrics {
+    // Worker identifier
+    string worker_id = 1;
+    
+    // Test identifier
+    string test_id = 2;
+    
+    // Timestamp when metrics were collected
+    int64 timestamp_ms = 3;
+    
+    // Total requests attempted
+    int64 total_requests = 4;
+    
+    // Successfully completed requests
+    int64 successful_requests = 5;
+    
+    // Failed requests
+    int64 failed_requests = 6;
+    
+    // Current transactions per second
+    double current_tps = 7;
+    
+    // Currently active/running tasks
+    int32 active_tasks = 8;
+    
+    // Latency statistics
+    LatencyStatistics latency = 9;
+    
+    // Error details (if any recent errors)
+    repeated ErrorDetail errors = 10;
+}
+
+message LatencyStatistics {
+    // 50th percentile latency (milliseconds)
+    double p50_ms = 1;
+    
+    // 75th percentile latency (milliseconds)
+    double p75_ms = 2;
+    
+    // 90th percentile latency (milliseconds)
+    double p90_ms = 3;
+    
+    // 95th percentile latency (milliseconds)
+    double p95_ms = 4;
+    
+    // 99th percentile latency (milliseconds)
+    double p99_ms = 5;
+    
+    // 99.9th percentile latency (milliseconds)
+    double p999_ms = 6;
+    
+    // Average latency (milliseconds)
+    double avg_ms = 7;
+    
+    // Minimum latency (milliseconds)
+    double min_ms = 8;
+    
+    // Maximum latency (milliseconds)
+    double max_ms = 9;
+}
+
+message ErrorDetail {
+    // Error message
+    string message = 1;
+    
+    // Error type/category
+    string error_type = 2;
+    
+    // Number of occurrences
+    int32 count = 3;
+    
+    // First occurrence timestamp
+    int64 first_occurred_ms = 4;
+    
+    // Last occurrence timestamp
+    int64 last_occurred_ms = 5;
+}
+
+message MetricsAcknowledgment {
+    // Whether metrics were received successfully
+    bool received = 1;
+    
+    // Optional message
+    string message = 2;
+}

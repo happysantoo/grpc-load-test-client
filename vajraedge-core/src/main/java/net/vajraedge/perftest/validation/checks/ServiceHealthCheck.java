@@ -17,6 +17,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Validates that the target HTTP service is reachable and responding correctly.
@@ -57,7 +58,8 @@ public class ServiceHealthCheck implements ValidationCheck {
         }
         
         Object taskParam = context.getTaskParameter();
-        String url = taskParam instanceof String ? (String) taskParam : null;
+        String url = extractUrlFromTaskParameter(taskParam);
+        
         if (url == null || url.isBlank()) {
             log.warn("Service health check failed: URL parameter is missing");
             return CheckResult.fail(getName(), "URL parameter is required for HTTP tasks", 
@@ -66,6 +68,19 @@ public class ServiceHealthCheck implements ValidationCheck {
         
         log.info("Performing service health check for URL: {}", url);
         return validateHttpEndpoint(url);
+    }
+    
+    @SuppressWarnings("unchecked")
+    private String extractUrlFromTaskParameter(Object taskParam) {
+        // Handle both string URL and object with parameters
+        if (taskParam instanceof String) {
+            return (String) taskParam;
+        } else if (taskParam instanceof Map) {
+            Map<String, Object> params = (Map<String, Object>) taskParam;
+            Object urlObj = params.get("url");
+            return urlObj instanceof String ? (String) urlObj : null;
+        }
+        return null;
     }
     
     private CheckResult validateHttpEndpoint(String url) {

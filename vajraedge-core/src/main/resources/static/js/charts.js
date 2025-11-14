@@ -251,81 +251,129 @@ window.initializeCharts = function initializeCharts() {
 }
 
 // Update charts with new metrics
-window.updateCharts = function updateCharts(metrics, phase) {
-    console.log('updateCharts called with:', metrics, 'phase:', phase);
+window.updateCharts = function updateCharts(metrics, phase, metricsHistory = []) {
+    console.log('updateCharts called with:', metrics, 'phase:', phase, 'history points:', metricsHistory.length);
     
     try {
-    if (!tpsChart || !latencyChart) {
-        console.warn('Charts not initialized yet, attempting initialization...');
-        initializeCharts();
         if (!tpsChart || !latencyChart) {
-            console.error('Failed to initialize charts');
-            return;
-        }
-    }
-
-    // Track phase transitions
-    const previousPhase = currentPhase;
-    if (phase && phase !== currentPhase) {
-        currentPhase = phase;
-        phaseTransitionPoint = tpsChart.data.labels.length;
-        console.log('Phase transition detected:', previousPhase, '->', currentPhase, 'at point', phaseTransitionPoint);
-    }
-
-    const timestamp = new Date().toLocaleTimeString();
-    
-    // Define colors based on phase - using more distinct colors for sustain
-    const isSustain = currentPhase === 'SUSTAIN';
-    const tpsPointColor = isSustain ? 'rgb(40, 167, 69)' : 'rgb(23, 162, 184)'; // Bright green for sustain, teal for ramp
-    const p50Color = isSustain ? 'rgb(23, 162, 184)' : 'rgb(54, 162, 235)'; // Darker teal for sustain, light blue for ramp
-    const p95Color = isSustain ? 'rgb(255, 193, 7)' : 'rgb(255, 206, 86)'; // Darker amber for sustain, light yellow for ramp
-    const p99Color = isSustain ? 'rgb(220, 53, 69)' : 'rgb(255, 99, 132)'; // Darker red for sustain, light red for ramp
-
-    // Update TPS chart
-    tpsChart.data.labels.push(timestamp);
-    tpsChart.data.datasets[0].data.push(metrics.currentTps || 0);
-    tpsChart.data.datasets[0].pointBackgroundColor.push(tpsPointColor);
-    tpsChart.data.datasets[0].pointBorderColor.push(tpsPointColor);
-
-    // Keep only last MAX_DATA_POINTS
-    if (tpsChart.data.labels.length > MAX_DATA_POINTS) {
-        tpsChart.data.labels.shift();
-        tpsChart.data.datasets[0].data.shift();
-        tpsChart.data.datasets[0].pointBackgroundColor.shift();
-        tpsChart.data.datasets[0].pointBorderColor.shift();
-    }
-
-    tpsChart.update('none'); // Update without animation for smoother updates
-
-    // Update Latency chart
-    if (metrics.latencyPercentiles) {
-        latencyChart.data.labels.push(timestamp);
-        latencyChart.data.datasets[0].data.push(metrics.latencyPercentiles.p50 || 0);
-        latencyChart.data.datasets[0].pointBackgroundColor.push(p50Color);
-        latencyChart.data.datasets[0].pointBorderColor.push(p50Color);
-        
-        latencyChart.data.datasets[1].data.push(metrics.latencyPercentiles.p95 || 0);
-        latencyChart.data.datasets[1].pointBackgroundColor.push(p95Color);
-        latencyChart.data.datasets[1].pointBorderColor.push(p95Color);
-        
-        latencyChart.data.datasets[2].data.push(metrics.latencyPercentiles.p99 || 0);
-        latencyChart.data.datasets[2].pointBackgroundColor.push(p99Color);
-        latencyChart.data.datasets[2].pointBorderColor.push(p99Color);
-
-        // Keep only last MAX_DATA_POINTS
-        if (latencyChart.data.labels.length > MAX_DATA_POINTS) {
-            latencyChart.data.labels.shift();
-            latencyChart.data.datasets.forEach(dataset => {
-                dataset.data.shift();
-                dataset.pointBackgroundColor.shift();
-                dataset.pointBorderColor.shift();
-            });
+            console.warn('Charts not initialized yet, attempting initialization...');
+            initializeCharts();
+            if (!tpsChart || !latencyChart) {
+                console.error('Failed to initialize charts');
+                return;
+            }
         }
 
-        latencyChart.update('none');
-    } else {
-        console.warn('No latency percentiles in metrics:', metrics);
-    }
+        // If we have historical data, use it to populate charts
+        if (metricsHistory && metricsHistory.length > 0) {
+            // Use historical data to build complete time series
+            const labels = metricsHistory.map(dp => 
+                new Date(dp.timestamp).toLocaleTimeString()
+            );
+            const tpsValues = metricsHistory.map(dp => dp.tps);
+            const p50Values = metricsHistory.map(dp => dp.latency.p50);
+            const p95Values = metricsHistory.map(dp => dp.latency.p95);
+            const p99Values = metricsHistory.map(dp => dp.latency.p99);
+            
+            // Determine colors (for now, all same phase - can be enhanced later)
+            const isSustain = phase === 'SUSTAIN' || currentPhase === 'SUSTAIN';
+            const tpsPointColor = isSustain ? 'rgb(40, 167, 69)' : 'rgb(23, 162, 184)';
+            const p50Color = isSustain ? 'rgb(23, 162, 184)' : 'rgb(54, 162, 235)';
+            const p95Color = isSustain ? 'rgb(255, 193, 7)' : 'rgb(255, 206, 86)';
+            const p99Color = isSustain ? 'rgb(220, 53, 69)' : 'rgb(255, 99, 132)';
+            
+            const tpsColors = Array(labels.length).fill(tpsPointColor);
+            const p50Colors = Array(labels.length).fill(p50Color);
+            const p95Colors = Array(labels.length).fill(p95Color);
+            const p99Colors = Array(labels.length).fill(p99Color);
+            
+            // Update TPS chart with historical data
+            tpsChart.data.labels = labels;
+            tpsChart.data.datasets[0].data = tpsValues;
+            tpsChart.data.datasets[0].pointBackgroundColor = tpsColors;
+            tpsChart.data.datasets[0].pointBorderColor = tpsColors;
+            tpsChart.update('none');
+            
+            // Update Latency chart with historical data
+            latencyChart.data.labels = labels;
+            latencyChart.data.datasets[0].data = p50Values;
+            latencyChart.data.datasets[0].pointBackgroundColor = p50Colors;
+            latencyChart.data.datasets[0].pointBorderColor = p50Colors;
+            
+            latencyChart.data.datasets[1].data = p95Values;
+            latencyChart.data.datasets[1].pointBackgroundColor = p95Colors;
+            latencyChart.data.datasets[1].pointBorderColor = p95Colors;
+            
+            latencyChart.data.datasets[2].data = p99Values;
+            latencyChart.data.datasets[2].pointBackgroundColor = p99Colors;
+            latencyChart.data.datasets[2].pointBorderColor = p99Colors;
+            
+            latencyChart.update('none');
+            
+        } else {
+            // Fallback: Old point-by-point update (for backward compatibility)
+            const timestamp = new Date().toLocaleTimeString();
+            
+            // Track phase transitions
+            const previousPhase = currentPhase;
+            if (phase && phase !== currentPhase) {
+                currentPhase = phase;
+                phaseTransitionPoint = tpsChart.data.labels.length;
+                console.log('Phase transition detected:', previousPhase, '->', currentPhase, 'at point', phaseTransitionPoint);
+            }
+            
+            const isSustain = currentPhase === 'SUSTAIN';
+            const tpsPointColor = isSustain ? 'rgb(40, 167, 69)' : 'rgb(23, 162, 184)';
+            const p50Color = isSustain ? 'rgb(23, 162, 184)' : 'rgb(54, 162, 235)';
+            const p95Color = isSustain ? 'rgb(255, 193, 7)' : 'rgb(255, 206, 86)';
+            const p99Color = isSustain ? 'rgb(220, 53, 69)' : 'rgb(255, 99, 132)';
+
+            // Update TPS chart
+            tpsChart.data.labels.push(timestamp);
+            tpsChart.data.datasets[0].data.push(metrics.currentTps || metrics.totalTps || 0);
+            tpsChart.data.datasets[0].pointBackgroundColor.push(tpsPointColor);
+            tpsChart.data.datasets[0].pointBorderColor.push(tpsPointColor);
+
+            // Keep only last MAX_DATA_POINTS
+            if (tpsChart.data.labels.length > MAX_DATA_POINTS) {
+                tpsChart.data.labels.shift();
+                tpsChart.data.datasets[0].data.shift();
+                tpsChart.data.datasets[0].pointBackgroundColor.shift();
+                tpsChart.data.datasets[0].pointBorderColor.shift();
+            }
+
+            tpsChart.update('none');
+
+            // Update Latency chart
+            if (metrics.latencyPercentiles) {
+                latencyChart.data.labels.push(timestamp);
+                latencyChart.data.datasets[0].data.push(metrics.latencyPercentiles.p50 || 0);
+                latencyChart.data.datasets[0].pointBackgroundColor.push(p50Color);
+                latencyChart.data.datasets[0].pointBorderColor.push(p50Color);
+                
+                latencyChart.data.datasets[1].data.push(metrics.latencyPercentiles.p95 || 0);
+                latencyChart.data.datasets[1].pointBackgroundColor.push(p95Color);
+                latencyChart.data.datasets[1].pointBorderColor.push(p95Color);
+                
+                latencyChart.data.datasets[2].data.push(metrics.latencyPercentiles.p99 || 0);
+                latencyChart.data.datasets[2].pointBackgroundColor.push(p99Color);
+                latencyChart.data.datasets[2].pointBorderColor.push(p99Color);
+
+                // Keep only last MAX_DATA_POINTS
+                if (latencyChart.data.labels.length > MAX_DATA_POINTS) {
+                    latencyChart.data.labels.shift();
+                    latencyChart.data.datasets.forEach(dataset => {
+                        dataset.data.shift();
+                        dataset.pointBackgroundColor.shift();
+                        dataset.pointBorderColor.shift();
+                    });
+                }
+
+                latencyChart.update('none');
+            } else {
+                console.warn('No latency percentiles in metrics:', metrics);
+            }
+        }
     } catch (error) {
         console.error('Error in updateCharts:', error);
     }

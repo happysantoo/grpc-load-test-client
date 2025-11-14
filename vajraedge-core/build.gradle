@@ -5,6 +5,7 @@ plugins {
     id 'org.springframework.boot' version '3.5.7'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'jacoco'
+    id 'com.google.protobuf' version '0.9.4'
 }
 
 group = 'net.vajraedge'
@@ -39,9 +40,14 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     
-    // gRPC dependencies (optional - only if using gRPC tasks)
+    // gRPC dependencies for distributed testing
     implementation "io.grpc:grpc-netty-shaded:${grpcVersion}"
+    implementation "io.grpc:grpc-protobuf:${grpcVersion}"
     implementation "io.grpc:grpc-stub:${grpcVersion}"
+    implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
+    
+    // Annotations for gRPC
+    compileOnly 'org.apache.tomcat:annotations-api:6.0.53'
     
     // Command line parsing
     implementation 'info.picocli:picocli:4.7.6'
@@ -71,6 +77,34 @@ dependencies {
     testImplementation "org.apache.groovy:groovy:${groovyVersion}"
     testImplementation "org.apache.groovy:groovy-json:${groovyVersion}"
 }
+
+// Protobuf configuration for gRPC code generation
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:${protobufVersion}"
+    }
+    plugins {
+        grpc {
+            artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
+        }
+    }
+    generateProtoTasks {
+        all()*.plugins {
+            grpc {}
+        }
+    }
+}
+
+// Add generated sources to source sets
+sourceSets {
+    main {
+        java {
+            srcDirs 'build/generated/source/proto/main/grpc'
+            srcDirs 'build/generated/source/proto/main/java'
+        }
+    }
+}
+
 test {
     useJUnitPlatform()
     finalizedBy jacocoTestReport

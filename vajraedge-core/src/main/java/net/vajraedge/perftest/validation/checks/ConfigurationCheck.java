@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Validates test configuration parameters for sanity, safety, and correctness.
@@ -142,9 +143,19 @@ public class ConfigurationCheck implements ValidationCheck {
      * @param context validation context
      * @param errors list to accumulate errors
      */
+    @SuppressWarnings("unchecked")
     private void validateHttpTaskParameters(ValidationContext context, List<String> errors) {
         Object taskParam = context.getTaskParameter();
-        String url = taskParam instanceof String ? (String) taskParam : null;
+        String url = null;
+        
+        // Handle both string URL and object with parameters
+        if (taskParam instanceof String) {
+            url = (String) taskParam;
+        } else if (taskParam instanceof Map) {
+            Map<String, Object> params = (Map<String, Object>) taskParam;
+            Object urlObj = params.get("url");
+            url = urlObj instanceof String ? (String) urlObj : null;
+        }
         
         if (url == null || url.isBlank()) {
             errors.add("URL parameter is required for HTTP tasks");

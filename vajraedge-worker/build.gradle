@@ -3,18 +3,29 @@
 plugins {
     id 'java'
     id 'application'
+    id 'com.google.protobuf' version '0.9.4'
 }
 
 description = 'VajraEdge Worker - Template for building custom workers'
+
+// Reference versions from root project
+ext {
+    grpcVersion = rootProject.ext.grpcVersion
+    protobufVersion = rootProject.ext.protobufVersion
+}
 
 dependencies {
     // SDK dependency
     implementation project(':vajraedge-sdk')
     
-    // gRPC client for controller communication
-    implementation "io.grpc:grpc-netty-shaded:${rootProject.ext.grpcVersion}"
-    implementation "io.grpc:grpc-protobuf:${rootProject.ext.grpcVersion}"
-    implementation "io.grpc:grpc-stub:${rootProject.ext.grpcVersion}"
+    // gRPC dependencies for controller communication
+    implementation "io.grpc:grpc-netty-shaded:${grpcVersion}"
+    implementation "io.grpc:grpc-protobuf:${grpcVersion}"
+    implementation "io.grpc:grpc-stub:${grpcVersion}"
+    implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
+    
+    // Annotations for gRPC
+    compileOnly 'org.apache.tomcat:annotations-api:6.0.53'
     
     // Minimal logging
     implementation 'org.slf4j:slf4j-api:2.0.9'
@@ -26,6 +37,36 @@ dependencies {
     // Testing
     testImplementation "org.junit.jupiter:junit-jupiter:${rootProject.ext.junitVersion}"
     testImplementation 'org.assertj:assertj-core:3.26.3'
+}
+
+// Protobuf configuration for gRPC code generation
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:${protobufVersion}"
+    }
+    plugins {
+        grpc {
+            artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
+        }
+    }
+    generateProtoTasks {
+        all()*.plugins {
+            grpc {}
+        }
+    }
+}
+
+// Add generated sources to source sets
+sourceSets {
+    main {
+        java {
+            srcDirs 'build/generated/source/proto/main/grpc'
+            srcDirs 'build/generated/source/proto/main/java'
+        }
+        proto {
+            srcDirs '../vajraedge-core/src/main/proto'
+        }
+    }
 }
 
 jar {

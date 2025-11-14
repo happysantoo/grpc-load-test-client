@@ -28,7 +28,20 @@
                         <h5 class="mb-0">Test Configuration</h5>
                     </div>
                     <div class="card-body">
-                        <form id="testConfigForm">
+                        <!-- Mode Tabs -->
+                        <ul class="nav nav-tabs mb-3" id="modeTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="single-node-tab" data-bs-toggle="tab" data-bs-target="#single-node" type="button" role="tab">Single Node</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="distributed-tab" data-bs-toggle="tab" data-bs-target="#distributed" type="button" role="tab">Distributed</button>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content" id="modeTabContent">
+                            <!-- Single Node Mode -->
+                            <div class="tab-pane fade show active" id="single-node" role="tabpanel">
+                                <form id="testConfigForm">
                             <!-- Mode Selection -->
                             <div class="mb-3">
                                 <label for="testMode" class="form-label">Test Mode</label>
@@ -121,7 +134,27 @@
                             
                             <!-- Dynamic task parameters container -->
                             <div id="taskParametersContainer">
-                                <!-- Parameter fields will be dynamically inserted here -->
+                                <!-- HTTP Task Parameters (visible by default) -->
+                                <div id="httpParamsSingle" class="mb-3">
+                                    <h6 class="border-bottom pb-2">HTTP Request Parameters</h6>
+                                    <div class="mb-3">
+                                        <label for="httpUrl" class="form-label">Target URL</label>
+                                        <input type="url" class="form-control" id="httpUrlSingle" value="http://localhost:8080/actuator/health" placeholder="http://example.com/api">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="httpMethod" class="form-label">HTTP Method</label>
+                                        <select class="form-select" id="httpMethodSingle">
+                                            <option value="GET" selected>GET</option>
+                                            <option value="POST">POST</option>
+                                            <option value="PUT">PUT</option>
+                                            <option value="DELETE">DELETE</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="httpTimeout" class="form-label">Timeout (seconds)</label>
+                                        <input type="number" class="form-control" id="httpTimeoutSingle" value="30" min="1" max="300">
+                                    </div>
+                                </div>
                             </div>
                             
                             <div class="d-grid gap-2">
@@ -132,6 +165,123 @@
                                 <button type="button" class="btn btn-danger" id="stopBtn" disabled>Stop Test</button>
                             </div>
                         </form>
+                            </div>
+                            
+                            <!-- Distributed Mode -->
+                            <div class="tab-pane fade" id="distributed" role="tabpanel">
+                                <form id="distributedTestForm">
+                                    <div class="mb-3">
+                                        <label for="distTaskType" class="form-label">Task Type</label>
+                                        <select class="form-select" id="distTaskType" required>
+                                            <option value="HTTP" selected>HTTP Load Test</option>
+                                            <option value="SLEEP">Sleep Task</option>
+                                        </select>
+                                        <div class="form-text">Select the type of task to execute on workers</div>
+                                    </div>
+                                    
+                                    <!-- HTTP Task Parameters -->
+                                    <div id="httpParams" class="mb-3">
+                                        <div class="card">
+                                            <div class="card-header bg-light">
+                                                <strong>HTTP Task Configuration</strong>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="mb-3">
+                                                    <label for="httpUrl" class="form-label">Target URL</label>
+                                                    <input type="url" class="form-control" id="httpUrl" value="http://localhost:8080/actuator/health" placeholder="http://example.com/api">
+                                                    <div class="form-text">The HTTP endpoint to test</div>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="httpMethod" class="form-label">HTTP Method</label>
+                                                    <select class="form-select" id="httpMethod">
+                                                        <option value="GET" selected>GET</option>
+                                                        <option value="POST">POST</option>
+                                                        <option value="PUT">PUT</option>
+                                                        <option value="DELETE">DELETE</option>
+                                                    </select>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="httpTimeout" class="form-label">Timeout (seconds)</label>
+                                                    <input type="number" class="form-control" id="httpTimeout" value="30" min="1" max="300">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="httpHeaders" class="form-label">Custom Headers (optional)</label>
+                                                    <textarea class="form-control" id="httpHeaders" rows="2" placeholder='{"Authorization": "Bearer token", "Content-Type": "application/json"}'></textarea>
+                                                    <div class="form-text">JSON object with custom headers</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- SLEEP Task Parameters -->
+                                    <div id="sleepParams" class="mb-3 d-none">
+                                        <div class="card">
+                                            <div class="card-header bg-light">
+                                                <strong>Sleep Task Configuration</strong>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="mb-3">
+                                                    <label for="sleepDuration" class="form-label">Sleep Duration (milliseconds)</label>
+                                                    <input type="number" class="form-control" id="sleepDuration" value="100" min="1" max="60000">
+                                                    <div class="form-text">How long each task should sleep (1-60000ms)</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="targetTps" class="form-label">Target TPS</label>
+                                        <input type="number" class="form-control" id="targetTps" value="1000" min="1" required>
+                                        <div class="form-text">Total transactions per second across all workers</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="distDuration" class="form-label">Duration (seconds)</label>
+                                        <input type="number" class="form-control" id="distDuration" value="60" min="1" required>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="distRampUp" class="form-label">Ramp-Up (seconds)</label>
+                                        <input type="number" class="form-control" id="distRampUp" value="10" min="0">
+                                        <div class="form-text">Time to gradually reach target TPS</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="distMaxConcurrency" class="form-label">Max Concurrency per Worker</label>
+                                        <input type="number" class="form-control" id="distMaxConcurrency" value="10000" min="1">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="minWorkers" class="form-label">Minimum Workers Required</label>
+                                        <input type="number" class="form-control" id="minWorkers" value="1" min="1">
+                                        <div class="form-text">Test will fail if fewer workers are available</div>
+                                    </div>
+                                    
+                                    <div class="d-grid gap-2">
+                                        <button type="submit" class="btn btn-success" id="startDistBtn">
+                                            <span class="spinner-border spinner-border-sm d-none" id="startDistSpinner"></span>
+                                            Start Distributed Test
+                                        </button>
+                                        <button type="button" class="btn btn-danger" id="stopDistBtn" disabled>Stop Distributed Test</button>
+                                        <button type="button" class="btn btn-info" id="refreshWorkersBtn">
+                                            🔄 Refresh Workers
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Worker Status Panel -->
+                <div class="card mt-3" id="workerPanel">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">👷 Worker Nodes</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="workerList">
+                            <p class="text-muted">Loading workers...</p>
+                        </div>
                     </div>
                 </div>
 
@@ -390,6 +540,11 @@
         </div>
     </div>
 
+    <!-- Toast Container for Notifications -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <!-- Toasts will be dynamically added here -->
+    </div>
+
     <!--jQuery, Bootstrap, Chart.js, SockJS, STOMP -->
     <script src="/webjars/jquery/3.7.1/jquery.min.js"></script>
     <script src="/webjars/bootstrap/5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -398,8 +553,8 @@
     <script src="/webjars/stomp-websocket/2.3.4/stomp.min.js"></script>
     
     <!-- Application Scripts -->
-    <script src="/js/websocket.js"></script>
+    <!-- UNIFIED DASHBOARD - Single source of truth for all test management -->
+    <script src="/js/unified-dashboard.js"></script>
     <script src="/js/charts.js"></script>
-    <script src="/js/dashboard.js"></script>
 </body>
 </html>

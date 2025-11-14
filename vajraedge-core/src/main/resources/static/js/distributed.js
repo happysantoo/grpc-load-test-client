@@ -1,0 +1,470 @@
+/**
+ * Distributed Testing UI Logic
+ */
+console.log('distributed.js loaded');
+
+let currentDistributedTestId = null;
+let workerRefreshInterval = null;
+let activeTestsRefreshInterval = null;
+let metricsRefreshInterval = null;
+
+// Initialize distributed testing on page load
+$(document).ready(function() {
+    console.log('distributed.js document ready fired');
+    setupDistributedFormHandlers();
+    loadWorkers();
+    // DON'T load tests on startup - let tab switching handle it
+    
+    // Refresh workers and tests when distributed tab is shown
+    $('#distributed-tab').on('shown.bs.tab', function() {
+        console.log('Distributed tab shown - loading workers and tests');
+        loadWorkers();
+        loadActiveDistributedTests();
+        workerRefreshInterval = setInterval(loadWorkers, 5000);
+        activeTestsRefreshInterval = setInterval(loadActiveDistributedTests, 2000);
+    });
+    
+    $('#distributed-tab').on('hidden.bs.tab', function() {
+        console.log('Distributed tab hidden - stopping intervals');
+        if (workerRefreshInterval) {
+            clearInterval(workerRefreshInterval);
+            workerRefreshInterval = null;
+        }
+        if (activeTestsRefreshInterval) {
+            clearInterval(activeTestsRefreshInterval);
+            activeTestsRefreshInterval = null;
+        }
+        if (metricsRefreshInterval) {
+            clearInterval(metricsRefreshInterval);
+            metricsRefreshInterval = null;
+        }
+    });
+});
+
+/**
+ * Setup form handlers for distributed testing
+ */
+function setupDistributedFormHandlers() {
+    // Task type change handler - show/hide parameter sections
+    $('#distTaskType').on('change', function() {
+        const taskType = $(this).val();
+        if (taskType === 'HTTP') {
+            $('#httpParams').removeClass('d-none');
+            $('#sleepParams').addClass('d-none');
+        } else if (taskType === 'SLEEP') {
+            $('#httpParams').addClass('d-none');
+            $('#sleepParams').removeClass('d-none');
+        }
+    });
+    
+    // Start distributed test
+    $('#distributedTestForm').on('submit', function(e) {
+        e.preventDefault();
+        startDistributedTest();
+    });
+    
+    // Stop distributed test
+    $('#stopDistBtn').on('click', function() {
+        stopDistributedTest();
+    });
+    
+    // Refresh workers
+    $('#refreshWorkersBtn').on('click', function() {
+        loadWorkers();
+    });
+}
+
+/**
+ * Start a distributed test
+ */
+function startDistributedTest() {
+    const taskType = $('#distTaskType').val();
+    
+    // Collect task-specific parameters
+    const taskParameters = {};
+    if (taskType === 'HTTP') {
+        taskParameters.url = $('#httpUrl').val();
+        taskParameters.method = $('#httpMethod').val();
+        taskParameters.timeout = $('#httpTimeout').val();
+        
+        // Add custom headers if provided
+        const headers = $('#httpHeaders').val().trim();
+        if (headers) {
+            try {
+                JSON.parse(headers); // Validate JSON
+                taskParameters.headers = headers;
+            } catch (e) {
+                showNotification('danger', 'Invalid JSON in custom headers');
+                return;
+            }
+        }
+    } else if (taskType === 'SLEEP') {
+        taskParameters.duration = $('#sleepDuration').val();
+    }
+    
+    const request = {
+        taskType: taskType,
+        targetTps: parseInt($('#targetTps').val()),
+        durationSeconds: parseInt($('#distDuration').val()),
+        rampUpSeconds: parseInt($('#distRampUp').val()),
+        maxConcurrency: parseInt($('#distMaxConcurrency').val()),
+        minWorkers: parseInt($('#minWorkers').val()),
+        taskParameters: taskParameters
+    };
+    
+    // Show spinner
+    $('#startDistSpinner').removeClass('d-none');
+    $('#startDistBtn').prop('disabled', true);
+    
+    $.ajax({
+        url: '/api/tests/distributed',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(request),
+        success: function(response) {
+            if (response.success) {
+                currentDistributedTestId = response.testId;
+                $('#startDistBtn').prop('disabled', true);
+                $('#stopDistBtn').prop('disabled', false);
+                
+                showNotification('success', 'Distributed test started: ' + response.message);
+                
+                // Start monitoring test
+                monitorDistributedTest(response.testId);
+            } else {
+                showNotification('danger', 'Failed to start test: ' + response.message);
+                $('#startDistBtn').prop('disabled', false);
+            }
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON?.message || 'Failed to start distributed test';
+            showNotification('danger', error);
+            $('#startDistBtn').prop('disabled', false);
+        },
+        complete: function() {
+            $('#startDistSpinner').addClass('d-none');
+        }
+    });
+}
+
+/**
+ * Stop distributed test
+ */
+function stopDistributedTest() {
+    if (!currentDistributedTestId) {
+        return;
+    }
+    
+    $.ajax({
+        url: `/api/tests/distributed/${currentDistributedTestId}?graceful=true`,
+        method: 'DELETE',
+        success: function(response) {
+            showNotification('info', 'Distributed test stopped');
+            $('#startDistBtn').prop('disabled', false);
+            $('#stopDistBtn').prop('disabled', true);
+            currentDistributedTestId = null;
+        },
+        error: function(xhr) {
+            showNotification('danger', 'Failed to stop test');
+        }
+    });
+}
+
+/**
+ * Monitor distributed test status
+ */
+function monitorDistributedTest(testId) {
+    // Stop any existing monitoring
+    if (metricsRefreshInterval) {
+        clearInterval(metricsRefreshInterval);
+    }
+    
+    // Start polling for metrics
+    metricsRefreshInterval = setInterval(function() {
+        $.ajax({
+            url: `/api/tests/distributed/${testId}`,
+            method: 'GET',
+            success: function(response) {
+                updateDistributedMetrics(response);
+            },
+            error: function() {
+                console.log('Failed to fetch metrics for test:', testId);
+            }
+        });
+    }, 1000);
+}
+
+/**
+ * Update distributed metrics display
+ */
+function updateDistributedMetrics(data) {
+    console.log('updateDistributedMetrics called with data:', data);
+    const metrics = data.metrics;
+    const testInfo = data.testInfo;
+    
+    if (!metrics) {
+        console.warn('No metrics data available');
+        return;
+    }
+    
+    console.log('Updating metrics panel...');
+    // Show metrics panel, hide "no test" message
+    $('#noTestMessage').addClass('d-none');
+    $('#metricsPanel').removeClass('d-none');
+    
+    // Update current test ID
+    $('#currentTestId').text(testInfo.testId.substring(0, 12) + '...');
+    console.log('Updated test ID in header');
+    
+    // Update summary metrics
+    $('#totalRequests').text(metrics.totalRequests?.toLocaleString() || '0');
+    $('#successfulRequests').text(metrics.successfulRequests?.toLocaleString() || '0');
+    $('#failedRequests').text(metrics.failedRequests?.toLocaleString() || '0');
+    $('#currentTps').text(metrics.totalTps?.toFixed(2) || '0.00');
+    console.log('Updated request counts - total:', metrics.totalRequests);
+    
+    // Update success rate
+    if (metrics.totalRequests > 0) {
+        const successRate = (metrics.successfulRequests / metrics.totalRequests * 100).toFixed(2);
+        $('#successRate').text(successRate + '%');
+    } else {
+        $('#successRate').text('0%');
+    }
+    
+    // Update percentiles if available
+    if (metrics.latency) {
+        $('#p50').text(metrics.latency.p50Ms || '-');
+        $('#p95').text(metrics.latency.p95Ms || '-');
+        $('#p99').text(metrics.latency.p99Ms || '-');
+        $('#avgLatency').text((metrics.latency.avgMs || 0) + 'ms');
+    }
+    
+    // Update test status
+    const now = Date.now();
+    const elapsed = Math.floor((now - testInfo.startedAt) / 1000);
+    $('#elapsedTime').text(elapsed + 's');
+    
+    if (elapsed < testInfo.durationSeconds) {
+        $('#testStatus').text('RUNNING').removeClass('text-success').addClass('text-warning');
+    } else {
+        $('#testStatus').text('COMPLETED').removeClass('text-warning').addClass('text-success');
+        // Stop monitoring when test completes
+        if (metricsRefreshInterval) {
+            clearInterval(metricsRefreshInterval);
+            metricsRefreshInterval = null;
+        }
+        $('#startDistBtn').prop('disabled', false);
+        $('#stopDistBtn').prop('disabled', true);
+    }
+    console.log('Metrics panel update complete');
+}
+
+/**
+ * Load and display workers
+ */
+function loadWorkers() {
+    console.log('loadWorkers() called');
+    $.ajax({
+        url: '/api/workers',
+        method: 'GET',
+        success: function(response) {
+            console.log('Workers loaded:', response.totalCount, 'workers');
+            displayWorkers(response.workers);
+            updateWorkerSummary(response);
+        },
+        error: function(xhr, status, error) {
+            console.error('Failed to load workers:', status, error);
+            $('#workerList').html('<p class="text-danger">Failed to load workers</p>');
+        }
+    });
+}
+
+/**
+ * Load active distributed tests
+ */
+function loadActiveDistributedTests() {
+    console.log('loadActiveDistributedTests() called');
+    $.ajax({
+        url: '/api/tests/distributed',
+        method: 'GET',
+        success: function(response) {
+            console.log('Active distributed tests loaded:', response.count, 'tests');
+            displayActiveTests(response.activeTests, response.count);
+        },
+        error: function(xhr, status, error) {
+            console.error('Failed to load active distributed tests:', status, error, xhr);
+        }
+    });
+}
+
+/**
+ * Display active distributed tests in the Active Tests panel
+ */
+function displayActiveTests(activeTests, count) {
+    console.log('displayActiveTests called:', count, 'tests');
+    const listContainer = $('#activeTestsList');
+    
+    if (count === 0) {
+        console.log('No active distributed tests');
+        listContainer.html('<p class="text-muted">No active distributed tests</p>');
+        return;
+    }
+    
+    console.log('Clearing and populating active tests list');
+    listContainer.empty();
+    
+    Object.entries(activeTests).forEach(([testId, testData]) => {
+        console.log('Adding test to list:', testId, testData);
+        const testInfo = testData.testInfo || testData; // Support both old and new format
+        const item = $(`
+            <div class="list-group-item list-group-item-action" data-test-id="${testId}">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">${testId.substring(0, 12)}...</h6>
+                    <small class="status-running">●</small>
+                </div>
+                <small class="text-muted">${testInfo.taskType} - ${testInfo.targetTps} TPS - ${testInfo.workerCount} workers</small>
+            </div>
+        `);
+        
+        item.on('click', function() {
+            console.log('Test clicked:', testId);
+            // Highlight selected test
+            $('.list-group-item').removeClass('active');
+            $(this).addClass('active');
+            
+            // Set current test and start monitoring
+            currentDistributedTestId = testId;
+            monitorDistributedTest(testId);
+        });
+        
+        listContainer.append(item);
+    });
+    
+    // Auto-select the first test if none is selected
+    
+    // Auto-select the first test if none is selected
+    if (!currentDistributedTestId && count > 0) {
+        const firstTestId = Object.keys(activeTests)[0];
+        currentDistributedTestId = firstTestId;
+        listContainer.find('.list-group-item').first().addClass('active');
+        monitorDistributedTest(firstTestId);
+    }
+}
+
+/**
+ * Display workers in the UI
+ */
+function displayWorkers(workers) {
+    console.log('displayWorkers() called with', workers ? workers.length : 0, 'workers');
+    if (!workers || workers.length === 0) {
+        console.log('No workers to display');
+        $('#workerList').html('<p class="text-muted">No workers registered</p>');
+        return;
+    }
+    
+    let html = '';
+    workers.forEach(function(worker) {
+        const statusBadge = getWorkerStatusBadge(worker.healthStatus);
+        const loadPercentage = worker.loadPercentage?.toFixed(1) || '0.0';
+        
+        html += `
+            <div class="card mb-2">
+                <div class="card-body p-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>${worker.workerId}</strong>
+                            <br>
+                            <small class="text-muted">${worker.hostname}</small>
+                        </div>
+                        <div class="text-end">
+                            ${statusBadge}
+                            <br>
+                            <small>Load: ${loadPercentage}%</small>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <div class="progress" style="height: 5px;">
+                            <div class="progress-bar ${getProgressBarClass(worker.healthStatus)}" 
+                                 role="progressbar" 
+                                 style="width: ${loadPercentage}%">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-1">
+                        <small class="text-muted">
+                            Capacity: ${worker.currentLoad}/${worker.maxCapacity} | 
+                            Tasks: ${worker.supportedTaskTypes?.join(', ') || 'None'}
+                        </small>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    $('#workerList').html(html);
+}
+
+/**
+ * Update worker summary
+ */
+function updateWorkerSummary(response) {
+    const summary = `${response.healthyCount}/${response.totalCount} healthy`;
+    $('#workerPanel .card-header h5').html(`👷 Worker Nodes <small class="text-white">(${summary})</small>`);
+}
+
+/**
+ * Get status badge HTML for worker
+ */
+function getWorkerStatusBadge(status) {
+    const badges = {
+        'HEALTHY': '<span class="badge bg-success">Healthy</span>',
+        'AT_CAPACITY': '<span class="badge bg-warning">At Capacity</span>',
+        'OVERLOADED': '<span class="badge bg-danger">Overloaded</span>',
+        'UNHEALTHY': '<span class="badge bg-danger">Unhealthy</span>',
+        'DISCONNECTED': '<span class="badge bg-secondary">Disconnected</span>'
+    };
+    return badges[status] || '<span class="badge bg-secondary">Unknown</span>';
+}
+
+/**
+ * Get progress bar class based on status
+ */
+function getProgressBarClass(status) {
+    const classes = {
+        'HEALTHY': 'bg-success',
+        'AT_CAPACITY': 'bg-warning',
+        'OVERLOADED': 'bg-danger',
+        'UNHEALTHY': 'bg-danger',
+        'DISCONNECTED': 'bg-secondary'
+    };
+    return classes[status] || 'bg-secondary';
+}
+
+/**
+ * Show notification
+ */
+function showNotification(type, message) {
+    // Use existing notification system or create a simple toast
+    console.log(`[${type.toUpperCase()}] ${message}`);
+    
+    // Optional: Show Bootstrap toast
+    const toastHtml = `
+        <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `;
+    
+    // Append to body and show (requires toast container in HTML)
+    const $toast = $(toastHtml);
+    $('body').append($toast);
+    const toast = new bootstrap.Toast($toast[0]);
+    toast.show();
+    
+    // Remove after hidden
+    $toast.on('hidden.bs.toast', function() {
+        $toast.remove();
+    });
+}

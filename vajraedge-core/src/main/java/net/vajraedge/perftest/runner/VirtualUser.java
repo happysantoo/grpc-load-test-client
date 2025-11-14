@@ -3,7 +3,7 @@ package net.vajraedge.perftest.runner;
 import net.vajraedge.sdk.Task;
 import net.vajraedge.sdk.TaskFactory;
 import net.vajraedge.sdk.TaskResult;
-import net.vajraedge.perftest.metrics.MetricsCollector;
+import net.vajraedge.sdk.metrics.MetricsCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -1,6 +1,6 @@
 package net.vajraedge.perftest.runner;
 
-import net.vajraedge.perftest.metrics.MetricsSnapshot;
+import net.vajraedge.sdk.metrics.MetricsSnapshot;
 
 import java.time.Duration;
 

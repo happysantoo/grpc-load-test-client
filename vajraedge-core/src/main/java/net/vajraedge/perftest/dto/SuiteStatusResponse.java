@@ -2,7 +2,7 @@ package net.vajraedge.perftest.dto;
 
 import net.vajraedge.perftest.suite.ScenarioResult;
 import net.vajraedge.perftest.suite.SuiteResult;
-import net.vajraedge.perftest.metrics.MetricsSnapshot;
+import net.vajraedge.sdk.metrics.MetricsSnapshot;
 import net.vajraedge.perftest.service.MetricsService;
 
 import java.time.Instant;
