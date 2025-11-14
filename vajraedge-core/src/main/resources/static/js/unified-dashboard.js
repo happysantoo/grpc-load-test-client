@@ -11,11 +11,68 @@
 
 const appState = {
     currentMode: 'SINGLE_NODE', // What user is configuring
-    activeTests: new Map(),      // ALL tests (both types): Map<testId, Test>
+    activeTests: new Map(),      // RUNNING/RAMPING tests: Map<testId, Test>
+    completedTests: new Map(),   // COMPLETED tests (history): Map<testId, Test>
     selectedTest: null,          // Currently viewing testId
     pollingInterval: null,       // Polling timer
     websocketConnection: null    // WebSocket for single-node metrics
 };
+
+// ========================================
+// METRICS HISTORY COLLECTOR
+// ========================================
+
+/**
+ * Collects time-series metrics data for charts
+ */
+class MetricsHistoryCollector {
+    constructor(maxDataPoints = 100) {
+        this.maxDataPoints = maxDataPoints;
+        this.testHistory = new Map(); // testId -> dataPoints[]
+    }
+    
+    recordMetrics(testId, metrics) {
+        if (!this.testHistory.has(testId)) {
+            this.testHistory.set(testId, []);
+            console.log(`Started metrics history collection for test ${testId}`);
+        }
+        
+        const history = this.testHistory.get(testId);
+        const dataPoint = {
+            timestamp: Date.now(),
+            tps: metrics.currentTps || metrics.totalTps || 0,
+            totalRequests: metrics.totalRequests || 0,
+            latency: {
+                p50: metrics.latencyPercentiles?.p50 || metrics.latencyPercentiles?.p50Ms || 0,
+                p95: metrics.latencyPercentiles?.p95 || metrics.latencyPercentiles?.p95Ms || 0,
+                p99: metrics.latencyPercentiles?.p99 || metrics.latencyPercentiles?.p99Ms || 0
+            }
+        };
+        
+        history.push(dataPoint);
+        console.log(`Recorded metrics for test ${testId}: TPS=${dataPoint.tps.toFixed(1)}, total points=${history.length}`);
+        
+        // Keep only last N points
+        if (history.length > this.maxDataPoints) {
+            history.shift();
+        }
+    }
+    
+    getHistory(testId) {
+        return this.testHistory.get(testId) || [];
+    }
+    
+    clearHistory(testId) {
+        this.testHistory.delete(testId);
+    }
+    
+    hasHistory(testId) {
+        return this.testHistory.has(testId) && this.testHistory.get(testId).length > 0;
+    }
+}
+
+// Global instance
+const metricsHistoryCollector = new MetricsHistoryCollector();
 
 // ========================================
 // UNIFIED TEST API
@@ -352,7 +409,10 @@ class TestController {
                 taskType: document.getElementById('taskType')?.value || 'HTTP',
                 taskParameter: this.buildTaskParameters(document.getElementById('taskType')?.value || 'HTTP')
             };
-            console.log('Built single-node config:', config);
+            console.log('Built single-node config:', JSON.stringify(config, null, 2));
+            console.log('Form values - rampDuration:', document.getElementById('rampDuration')?.value,
+                       'sustainDuration:', document.getElementById('sustainDuration')?.value,
+                       'testDuration:', document.getElementById('testDuration')?.value);
             return config;
         } else {
             const config = {
@@ -452,48 +512,115 @@ class TestController {
     async refreshAllTests() {
         const tests = await this.api.getAllTests();
         
-        // Update state
-        const newTestsMap = new Map();
-        tests.forEach(test => {
-            newTestsMap.set(test.testId, test);
+        // Track which test IDs we got from the API
+        const apiTestIds = new Set(tests.map(t => t.testId));
+        
+        // Check if any previously active tests are missing from API response
+        // They might have completed and been removed from backend
+        const previouslyActiveIds = Array.from(appState.activeTests.keys());
+        const missingTests = previouslyActiveIds.filter(id => !apiTestIds.has(id));
+        
+        // Move missing tests to completed (they finished)
+        missingTests.forEach(testId => {
+            const test = appState.activeTests.get(testId);
+            if (test && !appState.completedTests.has(testId)) {
+                test.status = 'COMPLETED';
+                test.completedAt = Date.now();
+                appState.completedTests.set(testId, test);
+                console.log(`Test ${testId} completed and moved to history`);
+            }
         });
         
-        appState.activeTests = newTestsMap;
+        // Separate active and completed tests from API response
+        const newActiveTests = new Map();
         
-        // Render
+        tests.forEach(test => {
+            const status = test.status?.toUpperCase() || 'UNKNOWN';
+            
+            if (status === 'COMPLETED' || status === 'FAILED' || status === 'STOPPED') {
+                // Add to completed tests (if not already there)
+                if (!appState.completedTests.has(test.testId)) {
+                    test.completedAt = Date.now();
+                    appState.completedTests.set(test.testId, test);
+                    console.log(`Test ${test.testId} completed (from API)`);
+                }
+            } else {
+                // RUNNING, RAMPING, SUSTAINING, etc.
+                // IMPORTANT: Preserve existing metrics for single-node tests (updated via WebSocket)
+                const existingTest = appState.activeTests.get(test.testId);
+                if (existingTest && existingTest.metrics) {
+                    test.metrics = existingTest.metrics;
+                    console.log(`Preserved metrics for test ${test.testId}`);
+                }
+                newActiveTests.set(test.testId, test);
+            }
+        });
+        
+        // Update active tests
+        appState.activeTests = newActiveTests;
+        
+        // Render updated list
         this.renderTestList();
         
-        // Update selected test metrics if still active
+        // Update selected test metrics ONLY if it's an active test
+        // Completed tests don't need refreshing
         if (appState.selectedTest && appState.activeTests.has(appState.selectedTest)) {
             this.updateMetrics(appState.selectedTest);
-        } else if (appState.selectedTest) {
-            // Selected test no longer active
-            appState.selectedTest = null;
-            this.hideMetricsPanel();
         }
     }
     
     renderTestList() {
         const container = document.getElementById('activeTestsList');
+        container.innerHTML = '';
         
-        if (appState.activeTests.size === 0) {
-            container.innerHTML = '<p class="text-muted">No active tests</p>';
+        // Check if we have any tests at all
+        if (appState.activeTests.size === 0 && appState.completedTests.size === 0) {
+            container.innerHTML = '<p class="text-muted">No tests yet</p>';
             return;
         }
         
-        container.innerHTML = '';
+        // Section 1: Active Tests
+        if (appState.activeTests.size > 0) {
+            const activeHeader = document.createElement('h6');
+            activeHeader.className = 'text-muted mt-2 mb-2';
+            activeHeader.innerHTML = '<i class="bi bi-play-circle"></i> Active Tests';
+            container.appendChild(activeHeader);
+            
+            appState.activeTests.forEach((test, testId) => {
+                const item = this.createTestListItem(test, true);
+                container.appendChild(item);
+            });
+        }
         
-        appState.activeTests.forEach((test, testId) => {
-            const item = this.createTestListItem(test);
-            container.appendChild(item);
-        });
+        // Section 2: Completed Tests (last 10)
+        if (appState.completedTests.size > 0) {
+            const completedHeader = document.createElement('h6');
+            completedHeader.className = 'text-muted mt-3 mb-2';
+            completedHeader.innerHTML = '<i class="bi bi-check-circle"></i> Completed Tests';
+            container.appendChild(completedHeader);
+            
+            // Get last 10 completed tests, sorted by completion time
+            const recentCompleted = Array.from(appState.completedTests.values())
+                .sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0))
+                .slice(0, 10);
+            
+            recentCompleted.forEach(test => {
+                const item = this.createTestListItem(test, false);
+                container.appendChild(item);
+            });
+        }
     }
     
-    createTestListItem(test) {
+    createTestListItem(test, isActive = true) {
         const item = document.createElement('div');
         const isSelected = test.testId === appState.selectedTest;
         
-        item.className = 'list-group-item list-group-item-action' + 
+        // Visual distinction: active tests have green border, completed have gray
+        const borderClass = isActive ? 'border-start border-success border-3' : 'border-start border-secondary border-2';
+        const statusIcon = isActive ? '🟢' : '✓';
+        const statusClass = isActive ? 'status-running' : 'text-muted';
+        
+        item.className = `list-group-item list-group-item-action ${borderClass}` + 
             (isSelected ? ' active' : '');
         
         const badge = test.type === 'DISTRIBUTED' ? '🌐' : '💻';
@@ -501,16 +628,20 @@ class TestController {
         const tps = metrics.totalTps?.toFixed(0) || metrics.currentTps?.toFixed(0) || '0';
         const requests = metrics.totalRequests || 0;
         
+        // Format timestamp for completed tests
+        const timeInfo = isActive ? '' : `<br><small class="text-muted">${this.formatTimestamp(test.completedAt)}</small>`;
+        
         item.innerHTML = `
             <div class="d-flex w-100 justify-content-between">
                 <h6 class="mb-1">${badge} ${test.testId.substring(0, 12)}</h6>
-                <small class="status-running">●</small>
+                <small class="${statusClass}">${statusIcon}</small>
             </div>
             <small class="text-muted">
                 ${test.type === 'DISTRIBUTED' ? 'Distributed' : 'Single-Node'} | 
                 ${test.taskType} | 
                 ${tps} TPS | 
                 ${this.formatNumber(requests)} reqs
+                ${timeInfo}
             </small>
         `;
         
@@ -519,10 +650,17 @@ class TestController {
         return item;
     }
     
+    formatTimestamp(timestamp) {
+        if (!timestamp) return '';
+        const date = new Date(timestamp);
+        return date.toLocaleTimeString();
+    }
+    
     selectTest(testId) {
         console.log('Selecting test:', testId);
         
-        const test = appState.activeTests.get(testId);
+        // Find test in either active or completed tests
+        const test = appState.activeTests.get(testId) || appState.completedTests.get(testId);
         if (!test) {
             console.warn('Test not found:', testId);
             return;
@@ -534,19 +672,34 @@ class TestController {
         this.renderTestList(); // Re-render to update highlighting
         this.updateMetrics(testId);
         
-        // Enable appropriate stop button based on test type
-        if (test.type === 'SINGLE_NODE') {
+        // Enable appropriate stop button only for active tests
+        const isActive = appState.activeTests.has(testId);
+        if (isActive && test.type === 'SINGLE_NODE') {
             const stopBtn = document.getElementById('stopBtn');
             if (stopBtn) stopBtn.disabled = false;
-        } else {
+        } else if (isActive && test.type === 'DISTRIBUTED') {
             const stopDistBtn = document.getElementById('stopDistBtn');
             if (stopDistBtn) stopDistBtn.disabled = false;
+        } else {
+            // Completed test - disable stop buttons
+            const stopBtn = document.getElementById('stopBtn');
+            const stopDistBtn = document.getElementById('stopDistBtn');
+            if (stopBtn) stopBtn.disabled = true;
+            if (stopDistBtn) stopDistBtn.disabled = true;
         }
     }
     
     updateMetrics(testId) {
-        const test = appState.activeTests.get(testId);
-        if (!test) return;
+        console.log(`🔄 updateMetrics called for ${testId}`);
+        
+        // Find test in either active or completed tests
+        const test = appState.activeTests.get(testId) || appState.completedTests.get(testId);
+        if (!test) {
+            console.error(`❌ Test ${testId} not found!`);
+            return;
+        }
+        
+        console.log(`📋 Found test ${testId}:`, test);
         
         // Show metrics panel
         this.showMetricsPanel();
@@ -554,17 +707,24 @@ class TestController {
         // Render unified metrics
         this.renderMetrics(test);
         
-        // Subscribe to real-time updates based on type
-        if (test.type === 'SINGLE_NODE') {
+        // Only subscribe to real-time updates for active tests
+        const isActive = appState.activeTests.has(testId);
+        console.log(`🔍 Test active: ${isActive}, type: ${test.type}`);
+        
+        if (isActive && test.type === 'SINGLE_NODE') {
             if (appState.websocketConnection) {
+                console.log('🔌 WebSocket connected, subscribing...');
                 this.subscribeToWebSocket(testId);
             } else {
-                console.warn('WebSocket not connected, will use polling for metrics');
+                console.warn('⚠️ WebSocket not connected, will use polling for metrics');
                 // Fallback: fetch metrics via REST API
                 this.startMetricsPolling(testId);
             }
+        } else {
+            console.log(`ℹ️ Not subscribing to WebSocket (active=${isActive}, type=${test.type})`);
         }
         // Distributed tests get metrics from polling (already in test.metrics)
+        // Completed tests just show static metrics (no updates needed)
     }
     
     startMetricsPolling(testId) {
@@ -599,15 +759,28 @@ class TestController {
     }
     
     renderMetrics(test) {
+        console.log(`🎨 renderMetrics called for test ${test.testId}`);
+        
         // Throttle rendering to prevent browser crash from too many DOM updates
         const now = Date.now();
         if (now - this.lastRenderTime < this.renderThrottleMs) {
+            console.log(`⏱️ Throttled (${now - this.lastRenderTime}ms since last render)`);
             return; // Skip this render, too soon since last update
         }
         this.lastRenderTime = now;
         
         const metrics = test.metrics || {};
+        console.log(`📊 Metrics object:`, metrics);
+        console.log(`📊 TotalRequests: ${metrics.totalRequests}, CurrentTPS: ${metrics.currentTps || metrics.totalTps}`);
+        
         const latency = metrics.latencyPercentiles || metrics.latency || {};
+        
+        // Record metrics history for active tests (for charts)
+        const isActive = appState.activeTests.has(test.testId);
+        console.log(`🔍 Test ${test.testId} active: ${isActive}, has metrics: ${metrics.totalRequests !== undefined}`);
+        if (isActive && metrics.totalRequests !== undefined) {
+            metricsHistoryCollector.recordMetrics(test.testId, metrics);
+        }
         
         // Update test info
         document.getElementById('currentTestId').textContent = test.testId;
@@ -639,9 +812,18 @@ class TestController {
         document.getElementById('p99').textContent = this.formatLatency(latency.p99Ms || latency.p99 || 0);
         document.getElementById('p999').textContent = this.formatLatency(latency.p999Ms || latency['p99.9'] || 0);
         
-        // Update charts if available and metrics exist
+        // Update charts with historical data if available
         if (typeof window.updateCharts === 'function' && metrics.totalRequests !== undefined) {
-            window.updateCharts(metrics, test.type === 'DISTRIBUTED' ? 'distributed' : 'single');
+            const history = metricsHistoryCollector.getHistory(test.testId);
+            console.log(`Updating charts for test ${test.testId} with ${history.length} historical points`);
+            window.updateCharts(metrics, test.type === 'DISTRIBUTED' ? 'distributed' : 'single', history);
+        } else {
+            if (typeof window.updateCharts !== 'function') {
+                console.warn('updateCharts function not available');
+            }
+            if (metrics.totalRequests === undefined) {
+                console.warn('No totalRequests in metrics, skipping chart update');
+            }
         }
         
         // Worker breakdown for distributed tests
@@ -659,11 +841,29 @@ class TestController {
         document.getElementById('noTestMessage')?.classList.add('d-none');
         document.getElementById('metricsPanel')?.classList.remove('d-none');
         
+        // Force chart resize after panel becomes visible
+        // Use setTimeout to ensure DOM has updated and panel is fully visible
+        setTimeout(() => {
+            if (window.tpsChart) {
+                console.log('Resizing TPS chart after panel shown...');
+                window.tpsChart.resize();
+            }
+            if (window.latencyChart) {
+                console.log('Resizing Latency chart after panel shown...');
+                window.latencyChart.resize();
+            }
+        }, 100);
+        
         // Initialize charts if not already initialized
         if (typeof window.initializeCharts === 'function') {
             if (!window.tpsChart || !window.latencyChart) {
                 console.log('Initializing charts...');
                 window.initializeCharts();
+                // Resize again after initialization
+                setTimeout(() => {
+                    if (window.tpsChart) window.tpsChart.resize();
+                    if (window.latencyChart) window.latencyChart.resize();
+                }, 100);
             }
         }
     }
@@ -709,37 +909,45 @@ class TestController {
     
     subscribeToWebSocket(testId) {
         if (!appState.websocketConnection) {
-            console.warn('WebSocket not connected, cannot subscribe to test:', testId);
+            console.error('❌ WebSocket not connected, cannot subscribe to test:', testId);
             return;
         }
         
         // Unsubscribe from previous test if any
         if (this.currentSubscription) {
-            console.log('Unsubscribing from previous test');
+            console.log('📴 Unsubscribing from previous test');
             this.currentSubscription.unsubscribe();
         }
         
         // Subscribe to metrics topic for this test
         const topic = `/topic/metrics/${testId}`;
-        console.log('Subscribing to WebSocket topic:', topic);
+        console.log('📡 Subscribing to WebSocket topic:', topic);
         
         this.currentSubscription = appState.websocketConnection.subscribe(topic, (message) => {
+            console.log('📨 RAW WebSocket message received:', message.body);
             const metrics = JSON.parse(message.body);
-            console.log('Received WebSocket metrics:', metrics);
+            console.log('✅ Parsed WebSocket metrics:', JSON.stringify(metrics, null, 2));
             
             // Update test metrics in state
             const test = appState.activeTests.get(testId);
             if (test) {
+                console.log(`📝 Updating metrics for test ${testId} in activeTests`);
                 test.metrics = metrics;
                 
                 // If this is the selected test, update display
                 if (appState.selectedTest === testId) {
+                    console.log(`🔄 Rendering metrics for selected test ${testId}`);
                     this.renderMetrics(test);
+                } else {
+                    console.log(`⏭️ Test ${testId} not selected (selected=${appState.selectedTest}), skipping render`);
                 }
+            } else {
+                console.error(`❌ Test ${testId} not found in activeTests!`);
+                console.log('Active tests:', Array.from(appState.activeTests.keys()));
             }
         });
         
-        console.log('WebSocket subscription created for test:', testId);
+        console.log('✅ WebSocket subscription created for test:', testId);
     }
     
     updateConnectionStatus(connected) {
