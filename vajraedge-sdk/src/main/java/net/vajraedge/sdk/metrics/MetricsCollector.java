@@ -1,4 +1,4 @@
-package net.vajraedge.perftest.metrics;
+package net.vajraedge.sdk.metrics;
 
 import net.vajraedge.sdk.TaskResult;
 import org.apache.commons.math3.stat.descriptive.rank.Percentile;

@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Validates network connectivity to the target HTTP service.
@@ -47,7 +48,8 @@ public class NetworkCheck implements ValidationCheck {
         }
         
         Object taskParam = context.getTaskParameter();
-        String url = taskParam instanceof String ? (String) taskParam : null;
+        String url = extractUrlFromTaskParameter(taskParam);
+        
         if (url == null || url.isBlank()) {
             log.debug("Skipping network check: No URL provided");
             return CheckResult.skip(getName(), "No URL provided for validation");
@@ -55,6 +57,19 @@ public class NetworkCheck implements ValidationCheck {
         
         log.info("Performing network check for URL: {}", url);
         return validateNetworkConnectivity(url);
+    }
+    
+    @SuppressWarnings("unchecked")
+    private String extractUrlFromTaskParameter(Object taskParam) {
+        // Handle both string URL and object with parameters
+        if (taskParam instanceof String) {
+            return (String) taskParam;
+        } else if (taskParam instanceof Map) {
+            Map<String, Object> params = (Map<String, Object>) taskParam;
+            Object urlObj = params.get("url");
+            return urlObj instanceof String ? (String) urlObj : null;
+        }
+        return null;
     }
     
     private CheckResult validateNetworkConnectivity(String urlString) {

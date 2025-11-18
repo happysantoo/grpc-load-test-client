@@ -1,9 +1,14 @@
 package net.vajraedge.perftest.controller;
 
+import net.vajraedge.perftest.distributed.DistributedMetricsCollector;
+import net.vajraedge.perftest.distributed.WorkerInfo;
+import net.vajraedge.perftest.distributed.WorkerManager;
+import net.vajraedge.perftest.dto.DistributedTestRequest;
 import net.vajraedge.perftest.dto.TestConfigRequest;
 import net.vajraedge.perftest.dto.TestStatusResponse;
 import net.vajraedge.perftest.sdk.plugin.PluginInfo;
 import net.vajraedge.perftest.sdk.plugin.PluginRegistry;
+import net.vajraedge.perftest.service.DistributedTestService;
 import net.vajraedge.perftest.service.TestExecutionService;
 import net.vajraedge.perftest.validation.PreFlightValidator;
 import net.vajraedge.perftest.validation.ValidationContext;
@@ -30,13 +35,19 @@ public class TestController {
     private final TestExecutionService testExecutionService;
     private final PreFlightValidator preFlightValidator;
     private final PluginRegistry pluginRegistry;
+    private final DistributedTestService distributedTestService;
+    private final WorkerManager workerManager;
     
     public TestController(TestExecutionService testExecutionService, 
                          PreFlightValidator preFlightValidator,
-                         PluginRegistry pluginRegistry) {
+                         PluginRegistry pluginRegistry,
+                         DistributedTestService distributedTestService,
+                         WorkerManager workerManager) {
         this.testExecutionService = testExecutionService;
         this.preFlightValidator = preFlightValidator;
         this.pluginRegistry = pluginRegistry;
+        this.distributedTestService = distributedTestService;
+        this.workerManager = workerManager;
     }
     
     /**
@@ -196,7 +207,6 @@ public class TestController {
             pluginData.put("description", plugin.metadata().description());
             pluginData.put("version", plugin.version());
             pluginData.put("author", plugin.author());
-            pluginData.put("parameters", plugin.metadata().parameters());
             pluginData.put("metadata", plugin.metadata().metadata());
             
             pluginsByCategory.computeIfAbsent(category, k -> new java.util.ArrayList<>()).add(pluginData);
@@ -207,5 +217,124 @@ public class TestController {
         response.put("totalCount", allPlugins.size());
         
         return ResponseEntity.ok(response);
+    }
+    
+    // ============================================================================
+    // Distributed Testing Endpoints
+    // ============================================================================
+    
+    /**
+     * Get all active distributed tests.
+     * 
+     * GET /api/tests/distributed
+     */
+    @GetMapping("/distributed")
+    public ResponseEntity<?> getActiveDistributedTests() {
+        logger.info("Fetching all active distributed tests");
+        
+        Map<String, DistributedTestService.DistributedTestInfo> activeTests = 
+            distributedTestService.getActiveTests();
+        
+        // Enrich each test with its metrics
+        Map<String, Map<String, Object>> enrichedTests = new HashMap<>();
+        for (Map.Entry<String, DistributedTestService.DistributedTestInfo> entry : activeTests.entrySet()) {
+            String testId = entry.getKey();
+            DistributedTestService.DistributedTestInfo testInfo = entry.getValue();
+            DistributedMetricsCollector.AggregatedMetrics metrics = 
+                distributedTestService.getTestMetrics(testId);
+            
+            Map<String, Object> testData = new HashMap<>();
+            testData.put("testInfo", testInfo);
+            testData.put("metrics", metrics);
+            enrichedTests.put(testId, testData);
+        }
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("activeTests", enrichedTests);
+        response.put("count", activeTests.size());
+        
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Start a distributed performance test across multiple workers.
+     * 
+     * POST /api/tests/distributed
+     */
+    @PostMapping("/distributed")
+    public ResponseEntity<?> startDistributedTest(@Valid @RequestBody DistributedTestRequest request) {
+        logger.info("Received request to start distributed test: taskType={}, targetTps={}, duration={}s",
+                request.getTaskType(), request.getTargetTps(), request.getDurationSeconds());
+        
+        try {
+            DistributedTestService.DistributedTestResponse response = 
+                distributedTestService.startDistributedTest(request);
+            
+            if (response.success()) {
+                return ResponseEntity.ok(response);
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+            
+        } catch (Exception e) {
+            logger.error("Failed to start distributed test", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                            "success", false,
+                            "message", "Failed to start distributed test: " + e.getMessage()
+                    ));
+        }
+    }
+    
+    /**
+     * Get status of a distributed test.
+     * 
+     * GET /api/tests/distributed/{testId}
+     */
+    @GetMapping("/distributed/{testId}")
+    public ResponseEntity<?> getDistributedTestStatus(@PathVariable String testId) {
+        logger.info("Fetching status for distributed test: {}", testId);
+        
+        DistributedTestService.DistributedTestInfo testInfo = distributedTestService.getTestInfo(testId);
+        
+        if (testInfo == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Test not found: " + testId));
+        }
+        
+        DistributedMetricsCollector.AggregatedMetrics metrics = 
+            distributedTestService.getTestMetrics(testId);
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("testInfo", testInfo);
+        response.put("metrics", metrics);
+        
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Stop a distributed test.
+     * 
+     * DELETE /api/tests/distributed/{testId}
+     */
+    @DeleteMapping("/distributed/{testId}")
+    public ResponseEntity<?> stopDistributedTest(@PathVariable String testId,
+                                                  @RequestParam(defaultValue = "true") boolean graceful) {
+        logger.info("Stopping distributed test: testId={}, graceful={}", testId, graceful);
+        
+        boolean stopped = distributedTestService.stopDistributedTest(testId, graceful);
+        
+        if (stopped) {
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Test stopped successfully"
+            ));
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of(
+                            "success", false,
+                            "message", "Test not found: " + testId
+                    ));
+        }
     }
 }

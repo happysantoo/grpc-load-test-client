@@ -1,13 +1,16 @@
 package net.vajraedge.worker;
 
+import net.vajraedge.sdk.SimpleTaskResult;
 import net.vajraedge.sdk.Task;
 import net.vajraedge.sdk.TaskResult;
+import net.vajraedge.sdk.metrics.MetricsCollector;
+import net.vajraedge.sdk.metrics.MetricsSnapshot;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.Map;
 
 /**
  * Service for executing tasks using virtual threads.
@@ -25,11 +28,9 @@ public class TaskExecutorService {
     private final ExecutorService executor;
     private final Semaphore concurrencyLimit;
     private final AtomicBoolean accepting;
-    private final AtomicLong completedTasks;
-    private final AtomicLong failedTasks;
     
-    private final ConcurrentLinkedQueue<TaskResult> recentResults;
-    private static final int MAX_RECENT_RESULTS = 1000;
+    // Per-test metrics collectors to isolate metrics
+    private final Map<String, MetricsCollector> testMetrics = new ConcurrentHashMap<>();
     
     /**
      * Create a new task executor with the specified concurrency limit.
@@ -41,9 +42,6 @@ public class TaskExecutorService {
         this.executor = Executors.newVirtualThreadPerTaskExecutor();
         this.concurrencyLimit = new Semaphore(maxConcurrency);
         this.accepting = new AtomicBoolean(false);
-        this.completedTasks = new AtomicLong(0);
-        this.failedTasks = new AtomicLong(0);
-        this.recentResults = new ConcurrentLinkedQueue<>();
     }
     
     /**
@@ -63,6 +61,33 @@ public class TaskExecutorService {
     }
     
     /**
+     * Register a test to track its metrics separately.
+     *
+     * @param testId Test identifier
+     */
+    public void registerTest(String testId) {
+        testMetrics.computeIfAbsent(testId, k -> new MetricsCollector());
+        log.debug("Registered test for metrics tracking: {}", testId);
+    }
+    
+    /**
+     * Unregister a test and clean up its metrics.
+     *
+     * @param testId Test identifier
+     */
+    public void unregisterTest(String testId) {
+        MetricsCollector removed = testMetrics.remove(testId);
+        if (removed != null) {
+            try {
+                removed.close();
+            } catch (Exception e) {
+                log.warn("Error closing metrics collector for test {}", testId, e);
+            }
+            log.debug("Unregistered test: {}", testId);
+        }
+    }
+    
+    /**
      * Execute a task asynchronously.
      *
      * @param task Task to execute
@@ -70,6 +95,18 @@ public class TaskExecutorService {
      * @throws RejectedExecutionException if executor is not accepting tasks
      */
     public CompletableFuture<TaskResult> executeAsync(Task task) {
+        return executeAsync(task, null);
+    }
+    
+    /**
+     * Execute a task asynchronously with test ID for metrics isolation.
+     *
+     * @param task Task to execute
+     * @param testId Test identifier for metrics tracking (null for global metrics)
+     * @return CompletableFuture with task result
+     * @throws RejectedExecutionException if executor is not accepting tasks
+     */
+    public CompletableFuture<TaskResult> executeAsync(Task task, String testId) {
         if (!accepting.get()) {
             throw new RejectedExecutionException("Task executor is not accepting new tasks");
         }
@@ -85,24 +122,38 @@ public class TaskExecutorService {
         CompletableFuture<TaskResult> future = new CompletableFuture<>();
         
         executor.submit(() -> {
+            long startNanos = System.nanoTime();
             try {
                 TaskResult result = task.execute();
                 
-                // Track result
-                if (result.isSuccess()) {
-                    completedTasks.incrementAndGet();
-                } else {
-                    failedTasks.incrementAndGet();
+                // Record result in appropriate metrics collector
+                if (testId != null) {
+                    MetricsCollector collector = testMetrics.get(testId);
+                    if (collector != null) {
+                        collector.recordResult(result);
+                    }
                 }
-                
-                // Store recent result
-                addRecentResult(result);
                 
                 future.complete(result);
                 
             } catch (Exception e) {
+                long latencyNanos = System.nanoTime() - startNanos;
                 log.error("Task execution failed", e);
-                failedTasks.incrementAndGet();
+                
+                // Record failure in metrics
+                TaskResult failedResult = SimpleTaskResult.failure(
+                    0L,  // taskId
+                    latencyNanos,
+                    e.getMessage()
+                );
+                
+                if (testId != null) {
+                    MetricsCollector collector = testMetrics.get(testId);
+                    if (collector != null) {
+                        collector.recordResult(failedResult);
+                    }
+                }
+                
                 future.completeExceptionally(e);
             } finally {
                 concurrencyLimit.release();
@@ -124,38 +175,87 @@ public class TaskExecutorService {
     }
     
     /**
-     * Add result to recent results queue (bounded).
+     * Submit a task for asynchronous execution (fire and forget).
+     *
+     * @param task Task to execute
      */
-    private void addRecentResult(TaskResult result) {
-        recentResults.offer(result);
-        
-        // Keep queue bounded
-        while (recentResults.size() > MAX_RECENT_RESULTS) {
-            recentResults.poll();
-        }
+    public void submit(Task task) {
+        executeAsync(task, null);  // Fire and forget
     }
     
     /**
-     * Get current executor statistics.
+     * Submit a task for asynchronous execution with test ID (fire and forget).
+     *
+     * @param task Task to execute
+     * @param testId Test identifier for metrics tracking
+     */
+    public void submit(Task task, String testId) {
+        executeAsync(task, testId);  // Fire and forget
+    }
+    
+    /**
+     * Check if executor can accept more tasks.
+     *
+     * @return true if under capacity
+     */
+    public boolean canAcceptMore() {
+        return accepting.get() && concurrencyLimit.availablePermits() > 0;
+    }
+    
+    /**
+     * Get current executor statistics (aggregated across all tests).
      *
      * @return Executor statistics
      */
     public ExecutorStats getStats() {
+        // Aggregate metrics from all active tests
+        long totalTasks = 0;
+        long failedTasks = 0;
+        double totalTps = 0.0;
+        
+        for (MetricsCollector collector : testMetrics.values()) {
+            MetricsSnapshot snapshot = collector.getSnapshot();
+            totalTasks += snapshot.getTotalTasks();
+            failedTasks += snapshot.getFailedTasks();
+            totalTps += snapshot.getTps();
+        }
+        
+        int active = maxConcurrency - concurrencyLimit.availablePermits();
+        
         return new ExecutorStats(
-            completedTasks.get(),
-            failedTasks.get(),
-            maxConcurrency - concurrencyLimit.availablePermits(),
+            totalTasks,
+            failedTasks,
+            active,
+            totalTps,
             accepting.get()
         );
     }
     
     /**
-     * Get recent task results for metrics reporting.
+     * Get metrics snapshot for a specific test.
      *
-     * @return List of recent results
+     * @param testId Test identifier
+     * @return Metrics snapshot, or null if test not found
      */
-    public ConcurrentLinkedQueue<TaskResult> getRecentResults() {
-        return recentResults;
+    public MetricsSnapshot getMetricsSnapshot(String testId) {
+        MetricsCollector collector = testMetrics.get(testId);
+        return collector != null ? collector.getSnapshot() : null;
+    }
+    
+    /**
+     * Get metrics snapshot aggregated across all tests.
+     * Returns metrics for single test if only one active, otherwise null.
+     *
+     * @return Metrics snapshot for single test, or null if multiple tests
+     */
+    public MetricsSnapshot getMetricsSnapshot() {
+        // If only one test, return its metrics
+        if (testMetrics.size() == 1) {
+            return testMetrics.values().iterator().next().getSnapshot();
+        }
+        
+        // Otherwise return null - caller should use getMetricsSnapshot(testId)
+        return null;
     }
     
     /**
@@ -203,6 +303,7 @@ public class TaskExecutorService {
         long completedTasks,
         long failedTasks,
         int activeTasks,
+        double currentTps,
         boolean accepting
     ) {}
 }

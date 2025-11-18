@@ -1,5 +1,7 @@
 package net.vajraedge.worker;
 
+import net.vajraedge.worker.tasks.SimpleHttpTask;
+import net.vajraedge.worker.tasks.SleepTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,10 +38,15 @@ public class Worker {
     private static final Logger log = LoggerFactory.getLogger(Worker.class);
     
     private final WorkerConfig config;
+    private final TaskRegistry taskRegistry;
     private final GrpcClient grpcClient;
     private final TaskExecutorService taskExecutor;
+    private final TaskAssignmentHandler assignmentHandler;
     private final MetricsReporter metricsReporter;
+    private final HeartbeatSender heartbeatSender;
+    private final WorkerGrpcServer grpcServer;
     private final CountDownLatch shutdownLatch;
+    private final String testId; // TODO: Make this configurable
     
     private volatile boolean running;
     
@@ -50,11 +57,32 @@ public class Worker {
      */
     public Worker(WorkerConfig config) {
         this.config = config;
+        this.testId = "default-test"; // TODO: Get from task assignment
+        this.taskRegistry = new TaskRegistry();
+        
+        // Register default tasks
+        registerDefaultTasks();
+        
         this.grpcClient = new GrpcClient(config.getControllerAddress());
         this.taskExecutor = new TaskExecutorService(config.getMaxConcurrency());
-        this.metricsReporter = new MetricsReporter(config.getWorkerId(), grpcClient, taskExecutor);
+        this.metricsReporter = new MetricsReporter(config.getWorkerId(), testId, grpcClient, taskExecutor);
+        this.assignmentHandler = new TaskAssignmentHandler(taskRegistry, taskExecutor, grpcClient, metricsReporter);
+        this.grpcServer = new WorkerGrpcServer(config.getGrpcPort(), assignmentHandler);
+        this.heartbeatSender = new HeartbeatSender(config.getWorkerId(), grpcClient, taskExecutor);
         this.shutdownLatch = new CountDownLatch(1);
         this.running = false;
+        
+        // Wire up assignment handler in gRPC client
+        grpcClient.setAssignmentHandler(assignmentHandler);
+    }
+    
+    /**
+     * Register default task types that are available out of the box.
+     */
+    private void registerDefaultTasks() {
+        taskRegistry.registerTask("HTTP", SimpleHttpTask.class);
+        taskRegistry.registerTask("SLEEP", SleepTask.class);
+        log.info("Registered {} default task types", taskRegistry.getSupportedTaskTypes().length);
     }
     
     /**
@@ -70,6 +98,10 @@ public class Worker {
             config.getMaxConcurrency());
         
         try {
+            // Start worker's gRPC server to receive task assignments
+            grpcServer.start();
+            log.info("Worker gRPC server started on port {}", config.getGrpcPort());
+            
             // Connect to controller
             grpcClient.connect();
             log.info("Connected to controller: {}", config.getControllerAddress());
@@ -78,18 +110,23 @@ public class Worker {
             grpcClient.registerWorker(
                 config.getWorkerId(), 
                 config.getCapabilities(),
-                config.getMaxConcurrency()
+                config.getMaxConcurrency(),
+                config.getGrpcPort()
             );
             log.info("Worker registered successfully");
-            
             // Start task executor
             taskExecutor.start();
             log.info("Task executor started");
+            
+            // Start heartbeat sender
+            heartbeatSender.start();
+            log.info("Heartbeat sender started");
             
             // Start metrics reporting
             metricsReporter.start();
             log.info("Metrics reporter started");
             
+            running = true;
             running = true;
             
             // Keep worker alive
@@ -121,8 +158,14 @@ public class Worker {
             // Stop accepting new tasks
             taskExecutor.stopAcceptingTasks();
             
+            // Stop heartbeat sender
+            heartbeatSender.stop();
+            
             // Stop metrics reporting
             metricsReporter.stop();
+            
+            // Stop gRPC server
+            grpcServer.stop();
             
             // Wait for in-flight tasks to complete (with timeout)
             taskExecutor.awaitTermination(30);

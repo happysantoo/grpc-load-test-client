@@ -1,8 +1,8 @@
 package net.vajraedge.perftest.service;
 
 import net.vajraedge.perftest.dto.MetricsResponse;
-import net.vajraedge.perftest.metrics.MetricsSnapshot;
-import net.vajraedge.perftest.metrics.PercentileStats;
+import net.vajraedge.sdk.metrics.MetricsSnapshot;
+import net.vajraedge.sdk.metrics.PercentileStats;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;

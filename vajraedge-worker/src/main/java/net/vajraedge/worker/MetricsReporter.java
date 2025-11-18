@@ -1,5 +1,7 @@
 package net.vajraedge.worker;
 
+import net.vajraedge.sdk.metrics.MetricsSnapshot;
+import net.vajraedge.sdk.metrics.PercentileStats;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +28,7 @@ public class MetricsReporter {
     private static final Logger log = LoggerFactory.getLogger(MetricsReporter.class);
     
     private final String workerId;
+    private volatile String testId;  // Made mutable to support multiple tests
     private final GrpcClient grpcClient;
     private final TaskExecutorService taskExecutor;
     private final ScheduledExecutorService scheduler;
@@ -37,11 +40,13 @@ public class MetricsReporter {
      * Create a new metrics reporter.
      *
      * @param workerId Unique worker identifier
+     * @param testId Test identifier
      * @param grpcClient gRPC client for sending metrics
      * @param taskExecutor Task executor to collect metrics from
      */
-    public MetricsReporter(String workerId, GrpcClient grpcClient, TaskExecutorService taskExecutor) {
+    public MetricsReporter(String workerId, String testId, GrpcClient grpcClient, TaskExecutorService taskExecutor) {
         this.workerId = workerId;
+        this.testId = testId;
         this.grpcClient = grpcClient;
         this.taskExecutor = taskExecutor;
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -107,29 +112,74 @@ public class MetricsReporter {
      */
     private void reportMetrics() {
         try {
-            // Get current stats from executor
-            TaskExecutorService.ExecutorStats stats = taskExecutor.getStats();
+            // Get current test ID
+            String currentTestId = this.testId;
+            if (currentTestId == null) {
+                log.trace("No test ID set, skipping metrics report");
+                return;
+            }
+            
+            // Get metrics snapshot for the specific test
+            MetricsSnapshot snapshot = taskExecutor.getMetricsSnapshot(currentTestId);
+            
+            // Skip reporting if no snapshot found or no tasks executed
+            if (snapshot == null || snapshot.getTotalTasks() == 0) {
+                log.trace("No metrics available for test {}, skipping report", currentTestId);
+                return;
+            }
+            
+            // Get percentile stats (handle empty case gracefully)
+            PercentileStats percentiles = snapshot.getPercentiles();
+            double p50 = 0.0;
+            double p95 = 0.0;
+            double p99 = 0.0;
+            
+            if (percentiles != null) {
+                p50 = percentiles.getPercentile(0.5);
+                p95 = percentiles.getPercentile(0.95);
+                p99 = percentiles.getPercentile(0.99);
+            }
             
             // Create metrics snapshot
-            WorkerMetrics metrics = new WorkerMetrics(
-                stats.completedTasks(),
-                stats.failedTasks(),
-                stats.activeTasks(),
+            LocalWorkerMetrics metrics = new LocalWorkerMetrics(
+                snapshot.getTotalTasks(),
+                snapshot.getSuccessfulTasks(),
+                snapshot.getFailedTasks(),
+                taskExecutor.getStats().activeTasks(),  // Get active from ExecutorStats
+                snapshot.getTps(),
+                p50,
+                p95,
+                p99,
                 System.currentTimeMillis()
             );
             
             // Send to controller
-            grpcClient.sendMetrics(workerId, metrics);
+            grpcClient.sendMetrics(workerId, currentTestId, metrics);
             
-            log.debug("Metrics reported: workerId={}, completed={}, failed={}, active={}", 
+            log.debug("Metrics reported: workerId={}, testId={}, completed={}, failed={}, active={}, tps={:.2f}, p50={:.2f}", 
                 workerId,
+                currentTestId,
                 metrics.completedTasks(), 
                 metrics.failedTasks(), 
-                metrics.activeTasks());
+                metrics.activeTasks(),
+                metrics.currentTps(),
+                p50);
             
         } catch (Exception e) {
             log.error("Failed to report metrics", e);
         }
+    }
+    
+    /**
+     * Set the current test ID for metrics reporting.
+     * This allows a single metrics reporter to report for different tests over time.
+     *
+     * @param testId Test identifier
+     */
+    public void setTestId(String testId) {
+        String oldTestId = this.testId;
+        this.testId = testId;
+        log.info("Metrics reporter testId updated: {} -> {}", oldTestId, testId);
     }
     
     /**

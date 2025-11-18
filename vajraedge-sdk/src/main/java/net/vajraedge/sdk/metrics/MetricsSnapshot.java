@@ -1,4 +1,4 @@
-package net.vajraedge.perftest.metrics;
+package net.vajraedge.sdk.metrics;
 
 import java.time.Duration;
 import java.time.Instant;

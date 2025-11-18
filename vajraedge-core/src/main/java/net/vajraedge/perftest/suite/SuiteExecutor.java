@@ -2,8 +2,8 @@ package net.vajraedge.perftest.suite;
 
 import net.vajraedge.perftest.dto.TestConfigRequest;
 import net.vajraedge.perftest.dto.TestStatusResponse;
-import net.vajraedge.perftest.metrics.MetricsCollector;
-import net.vajraedge.perftest.metrics.MetricsSnapshot;
+import net.vajraedge.sdk.metrics.MetricsCollector;
+import net.vajraedge.sdk.metrics.MetricsSnapshot;
 import net.vajraedge.perftest.service.MetricsService;
 import net.vajraedge.perftest.service.TestExecutionService;
 import org.slf4j.Logger;

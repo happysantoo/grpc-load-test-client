@@ -11,7 +11,7 @@ import net.vajraedge.sdk.Task;
 import net.vajraedge.sdk.TaskFactory;
 import net.vajraedge.perftest.dto.TestConfigRequest;
 import net.vajraedge.perftest.dto.TestStatusResponse;
-import net.vajraedge.perftest.metrics.MetricsCollector;
+import net.vajraedge.sdk.metrics.MetricsCollector;
 import net.vajraedge.perftest.runner.ConcurrencyBasedTestRunner;
 import net.vajraedge.perftest.runner.PerformanceTestRunner;
 import net.vajraedge.perftest.runner.TestResult;
@@ -204,7 +204,7 @@ public class TestExecutionService {
      * @param testId test identifier
      * @return MetricsSnapshot or null if test not found
      */
-    public net.vajraedge.perftest.metrics.MetricsSnapshot getTestMetrics(String testId) {
+    public net.vajraedge.sdk.metrics.MetricsSnapshot getTestMetrics(String testId) {
         TestExecution execution = activeTests.get(testId);
         if (execution == null) {
             return null;
@@ -255,7 +255,7 @@ public class TestExecutionService {
         return switch (taskTypeName) {
             case "SLEEP" -> taskId -> createSleepTask(taskId, getIntParameter(taskParameter));
             case "CPU" -> this::createCpuTask;
-            case "HTTP" -> taskId -> createHttpTask(getStringParameter(taskParameter));
+            case "HTTP" -> taskId -> createHttpTask(taskParameter);
             default -> {
                 logger.warn("Unknown task type: {}, defaulting to SLEEP", taskTypeName);
                 yield taskId -> createSleepTask(taskId, getIntParameter(taskParameter));
@@ -339,7 +339,18 @@ public class TestExecutionService {
         };
     }
     
-    private Task createHttpTask(String url) {
+    private Task createHttpTask(Object taskParameter) {
+        // Support both string URL (backward compatibility) and object with parameters
+        if (taskParameter instanceof String) {
+            return new HttpTask((String) taskParameter);
+        }
+        
+        // Handle Map/object parameters
+        Map<String, Object> params = convertToParameterMap(taskParameter);
+        String url = (String) params.getOrDefault("url", "http://localhost:8080/actuator/health");
+        
+        // For now, HttpTask only accepts URL. Future enhancement: support method, timeout
+        logger.debug("Creating HTTP task with URL: {}", url);
         return new HttpTask(url);
     }
     
